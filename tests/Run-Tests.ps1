@@ -53,6 +53,16 @@ unified_exec = true
     try { & $installScript -NetworkMode Allowlist -AllowedDomain 'example.com" = "allow' -WindowsSandbox Keep -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -MigrateLegacySettings -PlanOnly | Out-Null } catch { $domainInjectionRefused = $true }
     Assert-True $domainInjectionRefused 'Installer must reject malformed or injectable domain values.'
 
+    $unrestrictedPlan = @(& $installScript -NetworkMode Unrestricted -WindowsSandbox Keep -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -MigrateLegacySettings -PlanOnly) -join [Environment]::NewLine
+    Assert-True ($unrestrictedPlan -match 'does not expand filesystem permissions or add deletion authority') 'Unrestricted plan must explain that network access does not widen filesystem authority.'
+    Assert-True ($unrestrictedPlan -match 'prompt injection') 'Unrestricted plan must disclose prompt-injection risk before acknowledgement.'
+    Assert-True ($unrestrictedPlan -match 'any public Internet destination') 'Unrestricted plan must disclose the loss of destination containment.'
+
+    $unrestrictedRefused = $false
+    try { & $installScript -NetworkMode Unrestricted -WindowsSandbox Keep -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -MigrateLegacySettings -ConfirmApply -NonInteractive | Out-Null } catch { $unrestrictedRefused = $true }
+    Assert-True $unrestrictedRefused 'Non-interactive unrestricted networking must require -AcknowledgeRisk.'
+    Assert-True ([IO.File]::ReadAllText($configPath) -eq $originalConfig) 'A refused unrestricted-network acknowledgement must not modify configuration.'
+
     Invoke-GitTest -Repository $repository -GitArguments @('init') | Out-Null
     Invoke-GitTest -Repository $repository -GitArguments @('config', 'user.name', 'Test User') | Out-Null
     Invoke-GitTest -Repository $repository -GitArguments @('config', 'user.email', 'test@example.invalid') | Out-Null
@@ -60,7 +70,12 @@ unified_exec = true
     Invoke-GitTest -Repository $repository -GitArguments @('add', 'tracked.txt') | Out-Null
     Invoke-GitTest -Repository $repository -GitArguments @('commit', '-m', 'initial') | Out-Null
 
-    & $installScript -ApprovalMode AskMe -NetworkMode Allowlist -AllowedDomain 'example.com' -WindowsSandbox Keep -WorkspacePath $repository -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -MigrateLegacySettings -ConfirmApply -NonInteractive | Out-Null
+    $installResult = @(& $installScript -ApprovalMode AskMe -NetworkMode Allowlist -AllowedDomain 'example.com' -WindowsSandbox Keep -WorkspacePath $repository -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -MigrateLegacySettings -ConfirmApply -NonInteractive)
+    $installSummary = @($installResult | Where-Object { $_.PSObject.Properties['Status'] } | Select-Object -Last 1)
+    Assert-True ($installSummary.Count -eq 1) 'Installer must return a structured completion summary.'
+    Assert-True ($installSummary[0].RequiredPermissionSelection -match 'choose Custom') 'Completion summary must direct the user to Custom permissions.'
+    Assert-True ($installSummary[0].RequiredPermissionSelection -match 'codex-safe-workspace') 'Completion summary must name the custom profile.'
+    Assert-True ($installSummary[0].RequiredPermissionSelection -match 'Do not choose Full Access') 'Completion summary must distinguish Custom from Full Access.'
 
     $installedConfig = [IO.File]::ReadAllText($configPath)
     Assert-True ($installedConfig -match 'model = "test-model"') 'Unrelated top-level settings must be preserved.'
@@ -155,6 +170,8 @@ unified_exec = true
     Write-Output 'PASS: configuration migration and preservation'
     Write-Output 'PASS: read-only assessment classification'
     Write-Output 'PASS: migration-consent and domain-injection guards'
+    Write-Output 'PASS: unrestricted-network disclosure and acknowledgement guard'
+    Write-Output 'PASS: Custom permission activation handoff'
     Write-Output 'PASS: least-privilege and allowlist generation'
     Write-Output 'PASS: static and execpolicy verification'
     Write-Output 'PASS: branch/index-neutral Git checkpoint'

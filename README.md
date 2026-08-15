@@ -19,7 +19,7 @@ This project is not an absolute-safety guarantee and is not an official OpenAI p
 Requires Codex CLI 0.138.0 or newer. The plugin recommends PowerShell 7 on Windows and can install prerequisites only after explicit consent.
 
 ```powershell
-codex plugin marketplace add QianQIUlp/codex-safe-setup --ref v0.1.0
+codex plugin marketplace add QianQIUlp/codex-safe-setup --ref main
 codex plugin add codex-safe-setup@codex-safe-setup
 ```
 
@@ -29,7 +29,16 @@ Start a new Codex task or CLI session, then ask:
 Use $secure-codex-setup to audit my current permissions and install the recommended profile.
 ```
 
-You can also download the install-ready ZIP from [Releases](https://github.com/QianQIUlp/codex-safe-setup/releases). The marketplace method is preferred because Codex can track the plugin source and version.
+The marketplace follows `main`, whose catalog pins the plugin to the latest released tag. You can also download the install-ready ZIP from [Releases](https://github.com/QianQIUlp/codex-safe-setup/releases).
+
+If you installed `v0.1.0` using the old version-pinned marketplace command, switch that marketplace to the updateable channel once:
+
+```powershell
+codex plugin remove codex-safe-setup@codex-safe-setup
+codex plugin marketplace remove codex-safe-setup
+codex plugin marketplace add QianQIUlp/codex-safe-setup --ref main
+codex plugin add codex-safe-setup@codex-safe-setup
+```
 
 Each release includes a `.sha256` file. Verify the downloaded archive on PowerShell with `Get-FileHash -Algorithm SHA256 <archive>`.
 
@@ -44,7 +53,9 @@ Approval mode and command networking are separate decisions:
 | `AutoReview` | Optional | Eligible crossings are sent to a reviewer agent; the sandbox does not become stronger. |
 | Network `Off` | Yes | Commands cannot access the network. |
 | Network `Allowlist` | Optional | The command proxy permits only explicitly named public domains. |
-| Network `Unrestricted` | High risk | Direct command egress, requiring a separate acknowledgement. |
+| Network `Unrestricted` | High risk | All public destinations are allowed, but only after the concrete risks are explained and separately acknowledged. |
+
+`Unrestricted` networking does not by itself expand filesystem permissions or grant a new ability to delete files. The filesystem profile still applies, including its existing ability to change or delete writable workspace files. The added risk is loss of destination containment: anything a command can already read or generate could be sent to any public Internet destination, including source, configuration, output, private data, or credentials that use an unexpected filename. Untrusted pages, issues, and dependency documentation can also carry prompt injection; networked commands can download malware or vulnerable dependencies and introduce license-restricted content. OpenAI recommends limiting internet access to the domains and methods actually needed. See [Agent internet access](https://learn.chatgpt.com/docs/cloud/internet-access) and [Agent approvals & security](https://learn.chatgpt.com/docs/agent-approvals-security).
 
 On Windows, the setup separately asks whether to install PowerShell 7 and Codex CLI, and whether to use the administrator-backed elevated sandbox. Declining a prerequisite never silently installs it. PowerShell 7 reduces legacy shell, quoting, encoding, and compatibility mistakes; it is useful, but it is not itself a security boundary.
 
@@ -74,7 +85,7 @@ The skill reports each control as:
 - `FAIL`: a required condition is missing or contradictory.
 - `NOT CONTROLLED`: the capability belongs to another control surface.
 
-Static configuration and `codex execpolicy check` are evidence, not proof of every future runtime behavior. Restart Codex after installation before runtime probes.
+Static configuration and `codex execpolicy check` are evidence, not proof of every future runtime behavior. After installation, open the Codex permission selector, choose **Custom**, confirm that `codex-safe-workspace` is selected, and start a new task or CLI session before runtime probes. Do not switch back to Full Access.
 
 The optional checkpoint bridge snapshots tracked and ordinary untracked files to hidden refs under `refs/codex-safe/checkpoints/*`. It refuses sensitive-looking untracked files and never performs automatic `reset --hard`, `clean`, branch replacement, or in-place checkout. See [How it works](docs/how-it-works.md).
 
