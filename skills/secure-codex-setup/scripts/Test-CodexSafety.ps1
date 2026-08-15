@@ -57,6 +57,12 @@ if ($state) {
     $backupOkay = (-not $state.OriginalConfigExists) -or ($state.ConfigBackup -and (Test-Path -LiteralPath $state.ConfigBackup -PathType Leaf))
     $checks.Add((New-CssCheck -Status $(if ($backupOkay) { 'PASS' } else { 'FAIL' }) -Control 'Rollback' -Evidence 'Original configuration backup or new-file marker is available'))
 
+    if ($env:OS -eq 'Windows_NT' -and $state.WindowsSandbox -eq 'Elevated') {
+        $sandboxHealth = Get-CssWindowsSandboxSetupHealth -CodexHome $resolvedHome -ExpectedProxyPort $(if ($state.NetworkMode -eq 'Off') { @() } else { @(3128, 8081) })
+        $sandboxStatus = if ($sandboxHealth.Status -eq 'CONFLICT') { 'FAIL' } elseif ($sandboxHealth.LatestDesiredMatchesExpected -or $sandboxHealth.Status -eq 'ALIGNED') { 'PASS' } else { 'PARTIAL' }
+        $checks.Add((New-CssCheck -Status $sandboxStatus -Control 'Elevated sandbox activation' -Evidence $sandboxHealth.Evidence))
+    }
+
     if ($state.BridgePath) {
         $bridgeOkay = Test-Path -LiteralPath $state.BridgePath -PathType Leaf
         $rulesOkay = Test-Path -LiteralPath $state.RulesPath -PathType Leaf
@@ -118,7 +124,7 @@ else {
     $checks.Add((New-CssCheck -Status FAIL -Control 'Install state' -Evidence "Missing or invalid: $statePath"))
 }
 
-$checks.Add((New-CssCheck -Status PARTIAL -Control 'Runtime enforcement' -Evidence 'Restart Codex and run a new sandboxed task to prove OS enforcement'))
+$checks.Add((New-CssCheck -Status PARTIAL -Control 'Runtime enforcement' -Evidence 'Restart Codex, select Custom, and run a new sandboxed task to prove OS enforcement; fully quit all Codex processes only if administrator prompts repeat'))
 $checks.Add((New-CssCheck -Status 'NOT CONTROLLED' -Control 'Other egress surfaces' -Evidence 'Web Search, Browser, Computer Use, apps, plugins, MCP, and cloud tasks use separate controls'))
 
 $overall = if (@($checks | Where-Object Status -eq 'FAIL').Count -gt 0) { 'FAILED' } elseif (@($checks | Where-Object Status -eq 'PARTIAL').Count -gt 0) { 'PARTIALLY VERIFIED' } else { 'VERIFIED' }

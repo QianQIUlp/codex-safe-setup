@@ -81,7 +81,9 @@ Web Search、Browser、Computer Use、App、Connector、其他 Plugin、MCP、�
 - `FAIL`：必要条件缺失或互相冲突。
 - `NOT CONTROLLED`：属于其他控制面。
 
-配置检查和 `codex execpolicy check` 是证据，不是对所有未来行为的绝对证明。安装完成后，必须在 Codex 的权限选择器中选择 **自定义（Custom）**，确认当前配置为 `codex-safe-workspace`，不要切回 Full Access；然后新建任务或 CLI 会话，再做运行时验证。
+配置检查和 `codex execpolicy check` 是证据，不是对所有未来行为的绝对证明。安装完成后，必须在 Codex 的权限选择器中选择 **自定义（Custom）**，确认当前配置为 `codex-safe-workspace`，不要切回 Full Access。Windows 上先重启 Codex 并新建任务，不要继续使用安装前的旧任务；只有管理员提示反复出现时，才需要完整退出所有 Codex 桌面窗口和 CLI 进程后重新启动。其他平台新建任务或 CLI 会话后再做运行时验证。
+
+Windows 上推荐的 `Elevated` 沙箱需要管理员确认操作系统级初始化，但工作区内的每条命令不应逐次提权。如果管理员提示反复出现，请运行只读审计并查看 `WindowsSandboxSetupHealth`。历史上发生过端口变化、但最新设置已经对齐时只记为信息，无需处理；只有当前仍冲突或继续反转时，才完整退出全部 Codex 进程并重新启动一次。不要仅为了隐藏这个生命周期问题而降级到 `Unelevated`。
 
 可选检查点会把已跟踪文件和普通未跟踪文件保存到 `refs/codex-safe/checkpoints/*` 隐藏引用中。它拒绝敏感未跟踪文件，也不会自动运行 `reset --hard`、`clean`、替换分支或原地恢复。详见[实现原理](docs/how-it-works.md)。
 

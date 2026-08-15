@@ -328,5 +328,6 @@ catch {
     RuleInstalled = $ruleInstalled
     Verification = $(if (Get-Command codex -ErrorAction SilentlyContinue) { 'Run Test-CodexSafety.ps1 after restarting Codex.' } else { 'PARTIAL: install Codex CLI for rule verification.' })
     RequiredPermissionSelection = 'Open the Codex permission selector, choose Custom, and confirm codex-safe-workspace is selected. Do not choose Full Access.'
-    RequiredRestart = 'Start a new Codex task or CLI session; the current execution environment does not retroactively adopt the new profile.'
+    RequiredRestart = $(if ($env:OS -eq 'Windows_NT') { 'Restart Codex and start a new task; do not resume a pre-install task because its proxy and sandbox state cannot be updated retroactively. If administrator prompts repeat, fully quit every Codex desktop window and CLI process, then relaunch once.' } else { 'Start a new Codex task or CLI session; the current execution environment does not retroactively adopt the new profile.' })
+    RequiredElevatedSetup = $(if ($WindowsSandbox -eq 'Elevated' -and $env:OS -eq 'Windows_NT') { 'After relaunch, approve the Windows sandbox administrator setup once if prompted. Repeated prompts are not normal; run the assessment before changing sandbox mode.' } else { 'Not applicable.' })
 }
