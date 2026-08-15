@@ -41,6 +41,15 @@ Offer these approval modes over the same least-privilege filesystem profile:
 
 Offer command-network modes separately: `Off` (recommended), `Allowlist` with explicit domains, or `Unrestricted` only after a high-risk acknowledgement. Explain that command-network settings do not control Web Search, Browser, Computer Use, apps, plugins, MCP, or cloud tasks.
 
+Before accepting `Unrestricted`, give the complete disclosure below in the user's language. Do not reduce it to “high risk” or ask for acknowledgement before explaining it:
+
+- Enabling unrestricted command networking does not itself expand filesystem permissions or add deletion authority. The active filesystem profile still applies, and files that are already writable inside the workspace can still be changed or deleted.
+- The wildcard removes the public-destination boundary: any data a sandboxed command can already read or generate may be sent to any public Internet destination. That can include source, configuration, command output, private data, and credentials whose filenames were not covered by deny rules.
+- Untrusted web pages, issues, or dependency documentation can contain prompt injection that induces exfiltration or unsafe commands. Networked commands can also download malware or vulnerable dependencies and introduce license-restricted content.
+- This does not mean disclosure will automatically occur. It means a human, model, or prompt-injection mistake has a much larger possible consequence. Recommend `Allowlist` for normal work and `Unrestricted` only for short, trusted tasks where the required destinations cannot be enumerated.
+
+Only after this disclosure, require an explicit acknowledgement equivalent to “I understand and accept unrestricted command-network risk.”
+
 ### 3. Obtain dependency consent separately
 
 Recommend PowerShell 7 on Windows because it reduces legacy shell, encoding, quoting, and compatibility surprises. State that it is not a security boundary and cannot prevent semantic path mistakes.
@@ -81,9 +90,13 @@ After approval, rerun with `-ConfirmApply -NonInteractive`. For `Unrestricted`, 
 
 Never select or preserve `danger-full-access` as a verified safe profile.
 
-### 6. Verify and report honestly
+### 6. Verify, activate, and report honestly
 
-Run `Test-CodexSafety.ps1`. Treat static configuration and `execpolicy` checks as evidence, not runtime proof. New settings apply to new execution environments, so instruct the user to restart Codex before runtime probes. Mark unavailable CLI rule checks as `PARTIAL`, not `PASS`.
+Run `Test-CodexSafety.ps1`. Treat static configuration and `execpolicy` checks as evidence, not runtime proof. Mark unavailable CLI rule checks as `PARTIAL`, not `PASS`.
+
+After a successful apply, end with a visible activation block. Tell the user to open the Codex permission selector, choose `Custom` / `自定义`, and confirm that `codex-safe-workspace` is the selected profile; explicitly say not to choose Full Access. On Windows, tell the user to restart Codex and start a new task rather than resume a pre-install task because existing execution environments retain their old proxy and sandbox state. If administrator prompts repeat, then require the user to fully quit every Codex desktop window and CLI process before one clean relaunch; alternating old and new loopback proxy port sets can invalidate the global elevated-firewall setup. On other platforms, start a new Codex task or CLI session because an existing execution environment does not retroactively adopt the new profile. Never imply that writing the file changed the current task's permissions.
+
+When Windows `Elevated` is selected, explain that an administrator-approved sandbox setup prompt can appear after relaunch, but it is not expected for each command. Repeated administrator prompts are a failure signal. Run the read-only assessment and inspect only its `WindowsSandboxSetupHealth` result: aligned latest ports mean historical changes are informational, while `CONFLICT` means stale Codex processes should be closed before one clean relaunch. Preserve `Elevated` unless its setup genuinely fails and the user explicitly chooses the weaker fallback.
 
 Report `PASS`, `PARTIAL`, `FAIL`, or `NOT CONTROLLED` for writes outside workspace, reads outside workspace, workspace secret files, protected metadata, deletion recovery, command egress, separate external tool surfaces, and rollback.
 

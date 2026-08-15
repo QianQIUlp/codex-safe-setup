@@ -15,7 +15,7 @@ Codex Safe Setup 是一个社区维护的 Codex 插件，用来安装最小权�
 需要 Codex CLI 0.138.0 或更高版本。Windows 上推荐 PowerShell 7；插件只会在用户明确同意后安装前置依赖。
 
 ```powershell
-codex plugin marketplace add QianQIUlp/codex-safe-setup --ref v0.1.0
+codex plugin marketplace add QianQIUlp/codex-safe-setup --ref main
 codex plugin add codex-safe-setup@codex-safe-setup
 ```
 
@@ -25,7 +25,16 @@ codex plugin add codex-safe-setup@codex-safe-setup
 使用 $secure-codex-setup 审计我当前的 Codex 权限，并安装推荐的安全配置。
 ```
 
-也可以从 [Releases](https://github.com/QianQIUlp/codex-safe-setup/releases) 下载可安装 ZIP。推荐 marketplace 安装方式，因为 Codex 能记录来源和版本。
+marketplace 跟随 `main`，其中的目录会把插件固定到最新的正式 Release。也可以从 [Releases](https://github.com/QianQIUlp/codex-safe-setup/releases) 下载可安装 ZIP。
+
+如果你曾按旧文档用固定的 `v0.1.0` 添加 marketplace，只需迁移一次到可更新通道：
+
+```powershell
+codex plugin remove codex-safe-setup@codex-safe-setup
+codex plugin marketplace remove codex-safe-setup
+codex plugin marketplace add QianQIUlp/codex-safe-setup --ref main
+codex plugin add codex-safe-setup@codex-safe-setup
+```
 
 每个 Release 都附带 `.sha256` 文件。可在 PowerShell 中运行 `Get-FileHash -Algorithm SHA256 <压缩包>` 核对下载内容。
 
@@ -40,7 +49,9 @@ codex plugin add codex-safe-setup@codex-safe-setup
 | `AutoReview` | 可选 | 符合条件的越界请求交给审查 Agent；不会增强沙箱。 |
 | 联网 `Off` | 是 | 命令无法访问网络。 |
 | 联网 `Allowlist` | 可选 | 只有明确列出的公开域名可通过命令代理访问。 |
-| 联网 `Unrestricted` | 高风险 | 命令可直接出网，需要单独确认风险。 |
+| 联网 `Unrestricted` | 高风险 | 允许访问任意公网目的地；必须先说明具体风险，再单独确认。 |
+
+`Unrestricted` 联网本身不会扩大文件系统权限，也不会额外获得删除权限；原有文件权限仍然生效，因此在可写工作区内原本允许的修改和删除仍然可以发生。新增风险是失去网络目的地边界：命令已经能够读取或生成的任何数据，都可能被发送到任意公网地址，包括源码、配置、命令输出、隐私信息，以及文件名没有命中拒绝规则的凭据。网页、Issue、依赖说明还可能携带提示注入，诱导 Agent 外传数据或执行不安全步骤；联网命令也可能下载恶意软件、有漏洞的依赖，或引入许可证受限内容。OpenAI 建议只开放任务实际需要的域名和 HTTP 方法。详见 [Agent internet access](https://learn.chatgpt.com/docs/cloud/internet-access) 与 [Agent approvals & security](https://learn.chatgpt.com/docs/agent-approvals-security)。
 
 Windows 上还会分别询问是否安装 PowerShell 7、Codex CLI，以及是否启用需要管理员确认的增强沙箱。拒绝依赖安装不会触发静默安装。PowerShell 7 能减少旧版 PowerShell 的编码、引号、兼容性与语义差异，但它本身不是安全边界。
 
@@ -70,7 +81,9 @@ Web Search、Browser、Computer Use、App、Connector、其他 Plugin、MCP、�
 - `FAIL`：必要条件缺失或互相冲突。
 - `NOT CONTROLLED`：属于其他控制面。
 
-配置检查和 `codex execpolicy check` 是证据，不是对所有未来行为的绝对证明。安装后需重启 Codex，再做运行时验证。
+配置检查和 `codex execpolicy check` 是证据，不是对所有未来行为的绝对证明。安装完成后，必须在 Codex 的权限选择器中选择 **自定义（Custom）**，确认当前配置为 `codex-safe-workspace`，不要切回 Full Access。Windows 上先重启 Codex 并新建任务，不要继续使用安装前的旧任务；只有管理员提示反复出现时，才需要完整退出所有 Codex 桌面窗口和 CLI 进程后重新启动。其他平台新建任务或 CLI 会话后再做运行时验证。
+
+Windows 上推荐的 `Elevated` 沙箱需要管理员确认操作系统级初始化，但工作区内的每条命令不应逐次提权。如果管理员提示反复出现，请运行只读审计并查看 `WindowsSandboxSetupHealth`。历史上发生过端口变化、但最新设置已经对齐时只记为信息，无需处理；只有当前仍冲突或继续反转时，才完整退出全部 Codex 进程并重新启动一次。不要仅为了隐藏这个生命周期问题而降级到 `Unelevated`。
 
 可选检查点会把已跟踪文件和普通未跟踪文件保存到 `refs/codex-safe/checkpoints/*` 隐藏引用中。它拒绝敏感未跟踪文件，也不会自动运行 `reset --hard`、`clean`、替换分支或原地恢复。详见[实现原理](docs/how-it-works.md)。
 

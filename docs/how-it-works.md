@@ -35,6 +35,10 @@ Command networking is configured separately as off, proxy-enforced allowlist, or
 
 The installer preserves unrelated TOML content, backs up each managed target, writes the permission profile and rule, registers authorized workspace roots, installs a synthetic outside-workspace canary, and records rollback state.
 
+On Windows, writing the configuration is not the activation boundary. Restart Codex and use a new task because an existing execution environment retains its original sandbox and proxy state. If administrator prompts repeat, close every Codex desktop and CLI process before one clean relaunch. The preferred `Elevated` sandbox may request administrator-approved OS setup, but it does not elevate each workspace command.
+
+The Windows sandbox stores firewall setup for the active loopback proxy ports. If an older task and a newly configured task use different port sets, each can invalidate the other's global setup and cause another administrator prompt. The read-only assessment retains only matching firewall port-change records from Codex's sandbox log and reports `WindowsSandboxSetupHealth`; it never includes logged command lines. A `CONFLICT` means the latest setup does not match the managed proxy defaults (`3128` and `8081`). `OSCILLATION_HISTORY` means a direct reversal occurred but the latest setup is aligned, so verification passes and no action is required unless prompts recur.
+
 ### 4. Verify
 
 `Test-CodexSafety.ps1` checks the generated configuration and, when a compatible CLI is available, calls `codex execpolicy check` against both allowed and deliberately broad command prefixes. Missing CLI verification produces `PARTIAL`, never a false `PASS`.

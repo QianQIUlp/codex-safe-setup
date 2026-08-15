@@ -2,6 +2,16 @@
 
 All notable changes are documented here. Releases follow semantic versioning.
 
+## 0.1.1 - 2026-08-16
+
+- Explain the concrete consequences of unrestricted command networking before acknowledgement: destination-unbounded exfiltration, prompt injection, unsafe downloads, and license risk.
+- Clarify that command networking does not itself widen filesystem or deletion authority, while existing workspace write/delete capability remains.
+- Require the completion handoff to select `Custom` / `自定义`, confirm `codex-safe-workspace`, and start a new task or session.
+- Move new marketplace installs to a `main`-tracked catalog so subsequent released versions can be discovered, with a one-time migration path for `v0.1.0` users.
+- Add regression coverage for the risk disclosure, acknowledgement guard, and activation handoff.
+- Diagnose repeated Windows elevated-sandbox administrator prompts by reporting proxy-port setup conflicts while treating recovered, aligned history as informational.
+- Clarify that normal activation needs a Codex restart and new task, while repeated prompts require a full desktop/CLI process shutdown before one clean relaunch.
+
 ## 0.1.0 - 2026-08-15
 
 Initial public release.
