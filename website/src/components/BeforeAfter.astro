@@ -1,0 +1,62 @@
+---
+import type { UiContent } from '../i18n/types';
+import Section from './Section.astro';
+
+interface Props {
+  content: UiContent;
+}
+
+const { content } = Astro.props;
+const t = content.beforeAfter;
+---
+
+<Section id="before-after" no="03" eyebrow={t.eyebrow} title={t.title} lead={t.lead} band="white">
+  <div class="ba-grid">
+    <div class="ba-panel open">
+      <h3 class="ba-panel-title">{t.before.title}</h3>
+      <span class="ba-panel-tag">{t.before.tagline}</span>
+      <ul class="ba-tree">
+        <li class="root">agent</li>
+        {t.before.items.map((item) => (
+          <li>
+            <span class="open-mark" aria-hidden="true">&#9675;</span> {item}
+          </li>
+        ))}
+      </ul>
+    </div>
+
+    <div class="ba-panel bounded">
+      <h3 class="ba-panel-title">{t.after.title}</h3>
+      <span class="ba-panel-tag">{t.after.tagline}</span>
+      <ul class="ba-tree">
+        <li class="root">agent</li>
+        {t.after.items.map((item) => (
+          <li>
+            <span class="allow-mark" aria-hidden="true">&#10003;</span> {item}
+          </li>
+        ))}
+        <li class="denied-line">{t.afterDenied}</li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="ba-bottom">{t.bottomLine}</p>
+
+  <div class="mode-block">
+    <div class="mode-block-head">
+      <span class="mode-label">{t.modes.label}</span>
+    </div>
+    <p class="mode-block-intro">{t.modes.intro}</p>
+    <div class="mode-rows">
+      {t.modes.rows.map((row) => (
+        <div class="mode-row">
+          <span class="mode-name">
+            {row.name}
+            {row.recommended && <span class="mode-tag">{t.modes.recommendedTag}</span>}
+          </span>
+          <span class="mode-detail">{row.detail}</span>
+        </div>
+      ))}
+    </div>
+  </div>
+</Section>

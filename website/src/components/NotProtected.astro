@@ -1,0 +1,39 @@
+---
+import type { UiContent } from '../i18n/types';
+import Section from './Section.astro';
+
+interface Props {
+  content: UiContent;
+}
+
+const { content } = Astro.props;
+const t = content.notProtected;
+---
+
+<Section id="not-protected" no="06" eyebrow={t.eyebrow} title={t.title} lead={t.lead} band="default">
+  <div class="np-wrap">
+    <ul class="np-list">
+      {t.items.map((item) => (
+        <li>
+          <span class="np-mark" aria-hidden="true">&#215;</span>
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+    <p class="np-as">{t.reportedAs}</p>
+    <p>
+      <a class="link-arrow" href={t.cta.href} target="_blank" rel="noopener noreferrer">
+        {t.cta.label}
+      </a>
+    </p>
+  </div>
+
+  <div class="case-panel tone-warn exposed-panel">
+    <span class="case-label">{t.exposed.label}</span>
+    <ul class="exposed-list">
+      {t.exposed.items.map((item) => (
+        <li>{item}</li>
+      ))}
+    </ul>
+  </div>
+</Section>

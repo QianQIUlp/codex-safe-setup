@@ -1,0 +1,71 @@
+---
+import type { UiContent, VerificationRow } from '../i18n/types';
+import Section from './Section.astro';
+
+interface Props {
+  content: UiContent;
+}
+
+const { content } = Astro.props;
+const t = content.verification;
+
+const statusIcon: Record<VerificationRow['status'], string> = {
+  pass: '\u2713',
+  partial: '\u25B3',
+  fail: '\u2715',
+  'not-controlled': '\u2013',
+};
+
+const reportName = content.lang === 'en' ? 'verification report' : '验证报告';
+const checkedLabel = content.lang === 'en' ? 'checked' : '已检查';
+---
+
+<Section id="verification" no="04" eyebrow={t.eyebrow} title={t.title} lead={t.lead} band="default">
+  <div class="report" role="table" aria-label={reportName}>
+    <div class="report-head" role="rowgroup">
+      <span class="report-file">codex-safe-setup / {content.lang === 'en' ? 'verification' : '验证'}</span>
+      <span>{checkedLabel}</span>
+    </div>
+    <div class="report-rows" role="rowgroup">
+      {t.rows.map((row) => (
+        <div class="report-row" role="row">
+          <span class={`report-status status-${row.status}`} role="rowheader">
+            <span class="chip" aria-hidden="true">{statusIcon[row.status]}</span>
+            {row.label}
+          </span>
+          <span class="report-detail" role="cell">{row.detail}</span>
+        </div>
+      ))}
+    </div>
+    <div class="report-caveat">
+      <span class="caveat-mark" aria-hidden="true">!</span>
+      <span>{t.caveat}</span>
+    </div>
+  </div>
+  <p class="report-restart">{t.restart}</p>
+
+  <div class="check-grid">
+    <div>
+      <span class="check-block-label">{t.checks.label}</span>
+      <ul class="check-list">
+        {t.checks.items.slice(0, 4).map((item) => (
+          <li>
+            <span class="check-mark" aria-hidden="true">&#8250;</span>
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+    <div>
+      <ul class="check-list check-list-late">
+        {t.checks.items.slice(4).map((item) => (
+          <li>
+            <span class="check-mark" aria-hidden="true">&#8250;</span>
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </div>
+  <p class="check-canary">{t.canary}</p>
+</Section>

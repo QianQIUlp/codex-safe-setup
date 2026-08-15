@@ -1,0 +1,34 @@
+---
+import type { UiContent } from '../i18n/types';
+import Section from './Section.astro';
+
+interface Props {
+  content: UiContent;
+}
+
+const { content } = Astro.props;
+const t = content.openSource;
+---
+
+<Section id="open-source" no="07" eyebrow={t.eyebrow} title={t.title} lead={t.lead} band="white">
+  <div class="os-links">
+    {t.items.map((item) => (
+      <a href={item.href} target="_blank" rel="noopener noreferrer">
+        {item.label}
+      </a>
+    ))}
+  </div>
+
+  <ul class="check-list os-facts">
+    {t.facts.map((fact) => (
+      <li>
+        <span class="check-mark" aria-hidden="true">&#8250;</span>
+        <span>{fact}</span>
+      </li>
+    ))}
+  </ul>
+
+  <a class="btn btn-secondary" href={t.cta.href} target="_blank" rel="noopener noreferrer">
+    {t.cta.label}
+  </a>
+</Section>

@@ -1,0 +1,111 @@
+---
+import type { UiContent } from '../i18n/types';
+import Section from './Section.astro';
+
+interface Props {
+  content: UiContent;
+}
+
+const { content } = Astro.props;
+const t = content.install;
+const requiresLabel = content.lang === 'en' ? 'Requirements' : '要求';
+---
+
+<Section
+  id="install"
+  no="05"
+  eyebrow={t.eyebrow}
+  title={t.title}
+  lead={t.lead}
+  band="white"
+  variant="split"
+>
+  <div class="install-grid">
+      <div class="install-panel">
+        <div class="install-panel-head">
+          <span>PowerShell</span>
+          <button
+            type="button"
+            class="copy-btn"
+            data-copy
+            data-copy-text={t.commands.join('\n')}
+            data-copied-label={t.copied}
+          >
+            {t.copyButton}
+          </button>
+        </div>
+        <div class="install-panel-body">
+          <pre class="install-cmds" id="install-commands"><span class="ps-prompt">PS&gt; </span>{t.commands.join('\n')}</pre>
+          <p class="install-prompt-label">{t.promptLabel}</p>
+          <p class="install-prompt">{t.promptText}</p>
+        </div>
+      </div>
+
+      <div>
+        <p class="install-requirements">
+          <span class="req-label">{requiresLabel}</span>
+          {t.requires}
+        </p>
+        <div class="install-notes">
+          <p>{t.releaseNote}</p>
+          <p>{t.shaNote}</p>
+        </div>
+        <p class="install-details">
+          <a
+            class="link-arrow"
+            href={t.detailsCta.href}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {t.detailsCta.label}
+          </a>
+        </p>
+      </div>
+    </div>
+
+    <div class="flow-block">
+      <div class="flow-block-head">
+        <span class="mode-label">{t.flow.label}</span>
+      </div>
+      <ol class="flow-list">
+        {t.flow.steps.map((step, index) => (
+          <li class="flow-step">
+            <span class="flow-num">{String(index + 1).padStart(2, '0')}</span>
+            <span>{step}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+</Section>
+
+<script>
+  const buttons = document.querySelectorAll<HTMLButtonElement>('[data-copy]');
+  const source = document.getElementById('install-commands');
+
+  for (const button of buttons) {
+    const originalLabel = button.textContent ?? '';
+    const copiedLabel = button.dataset.copiedLabel ?? originalLabel;
+
+    button.addEventListener('click', async () => {
+      const text = button.dataset.copyText ?? '';
+
+      try {
+        await navigator.clipboard.writeText(text);
+        button.textContent = copiedLabel;
+        button.dataset.copied = 'true';
+        window.setTimeout(() => {
+          button.textContent = originalLabel;
+          button.dataset.copied = 'false';
+        }, 2000);
+      } catch {
+        if (source) {
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(source);
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+        }
+      }
+    });
+  }
+</script>

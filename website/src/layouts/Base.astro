@@ -1,0 +1,55 @@
+---
+import type { UiContent } from '../i18n/types';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import '../styles/global.css';
+
+interface Props {
+  content: UiContent;
+}
+
+const { content } = Astro.props;
+
+const origin = (Astro.site?.origin ?? 'https://codex-safe-setup.pages.dev').replace(/\/+$/, '');
+const canonical = `${origin}${content.path}`;
+const enPath = '/';
+const zhPath = '/zh-CN/';
+---
+
+<!doctype html>
+<html lang={content.lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{content.meta.title}</title>
+    <meta name="description" content={content.meta.description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="alternate" hreflang="en" href={`${origin}${enPath}`} />
+    <link rel="alternate" hreflang="zh-CN" href={`${origin}${zhPath}`} />
+    <link rel="alternate" hreflang="x-default" href={`${origin}${enPath}`} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Codex Safe Setup" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:title" content={content.meta.ogTitle} />
+    <meta property="og:description" content={content.meta.ogDescription} />
+    <meta property="og:locale" content={content.lang === 'en' ? 'en_US' : 'zh_CN'} />
+    <meta
+      property="og:locale:alternate"
+      content={content.lang === 'en' ? 'zh_CN' : 'en_US'}
+    />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={content.meta.ogTitle} />
+    <meta name="twitter:description" content={content.meta.ogDescription} />
+    <meta name="theme-color" content="#f6f6f4" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">{content.lang === 'en' ? 'Skip to content' : '跳到正文'}</a>
+    <Header content={content} />
+    <main id="main">
+      <slot />
+    </main>
+    <Footer content={content} />
+  </body>
+</html>
