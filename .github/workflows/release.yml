@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag, for example v0.1.0
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Install tested Codex CLI
+        shell: pwsh
+        run: npm install --global @openai/codex@0.147.0
+
+      - name: Validate and test
+        shell: pwsh
+        run: |
+          ./tests/Validate-Package.ps1
+          ./tests/Run-Tests.ps1
+
+      - name: Build release archive
+        shell: pwsh
+        run: |
+          $manifest = Get-Content ./.codex-plugin/plugin.json -Raw | ConvertFrom-Json
+          $expectedTag = "v$($manifest.version)"
+          if ("${{ inputs.tag }}" -ne $expectedTag) {
+            throw "Requested tag must match manifest version: $expectedTag"
+          }
+          ./tools/Build-Release.ps1 -Force
+
+      - name: Upload archive to release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $archive = Get-ChildItem -LiteralPath ./dist -Filter '*.zip' | Select-Object -First 1
+          if ($null -eq $archive) {
+            throw 'Release archive is missing.'
+          }
+          gh release upload "${{ inputs.tag }}" $archive.FullName --clobber

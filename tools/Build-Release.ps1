@@ -1,0 +1,79 @@
+[CmdletBinding()]
+param(
+    [string]$OutputDirectory,
+    [string]$Version,
+    [switch]$Force
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$repositoryRoot = Split-Path -Parent $PSScriptRoot
+$manifestPath = Join-Path $repositoryRoot '.codex-plugin/plugin.json'
+$manifest = [IO.File]::ReadAllText($manifestPath) | ConvertFrom-Json
+
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    $Version = [string]$manifest.version
+}
+if ($Version -ne [string]$manifest.version) {
+    throw "Requested version '$Version' does not match plugin manifest version '$($manifest.version)'."
+}
+if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
+    $OutputDirectory = Join-Path $repositoryRoot 'dist'
+}
+
+[void](New-Item -ItemType Directory -Path $OutputDirectory -Force)
+$resolvedOutput = (Resolve-Path -LiteralPath $OutputDirectory).Path
+$archivePath = Join-Path $resolvedOutput ("codex-safe-setup-v{0}.zip" -f $Version)
+if (Test-Path -LiteralPath $archivePath) {
+    if (-not $Force) {
+        throw "Archive already exists: $archivePath. Use -Force to replace this exact file."
+    }
+    Remove-Item -LiteralPath $archivePath -Force
+}
+
+$temporaryRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+$stagingPath = Join-Path $temporaryRoot ("codex-safe-setup-package-{0}" -f [guid]::NewGuid().ToString('N'))
+[void](New-Item -ItemType Directory -Path $stagingPath)
+
+try {
+    foreach ($directory in @('.codex-plugin', 'skills')) {
+        Copy-Item -LiteralPath (Join-Path $repositoryRoot $directory) -Destination $stagingPath -Recurse -Force
+    }
+    foreach ($file in @('README.md', 'README.zh-CN.md', 'LICENSE', 'PRIVACY.md', 'SECURITY.md')) {
+        Copy-Item -LiteralPath (Join-Path $repositoryRoot $file) -Destination $stagingPath -Force
+    }
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [IO.Compression.ZipFile]::CreateFromDirectory(
+        $stagingPath,
+        $archivePath,
+        [IO.Compression.CompressionLevel]::Optimal,
+        $false
+    )
+
+    $archive = [IO.Compression.ZipFile]::OpenRead($archivePath)
+    try {
+        $entryNames = @($archive.Entries | ForEach-Object { $_.FullName.Replace('\', '/') })
+        if ($entryNames -notcontains '.codex-plugin/plugin.json') {
+            throw 'Built archive is missing .codex-plugin/plugin.json.'
+        }
+        if ($entryNames -notcontains 'skills/secure-codex-setup/SKILL.md') {
+            throw 'Built archive is missing the secure-codex-setup skill.'
+        }
+    }
+    finally {
+        $archive.Dispose()
+    }
+}
+finally {
+    $resolvedStaging = [IO.Path]::GetFullPath($stagingPath)
+    if ($resolvedStaging.StartsWith($temporaryRoot, [StringComparison]::OrdinalIgnoreCase) -and
+        (Split-Path -Leaf $resolvedStaging).StartsWith('codex-safe-setup-package-', [StringComparison]::Ordinal)) {
+        Remove-Item -LiteralPath $resolvedStaging -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+$hash = Get-FileHash -LiteralPath $archivePath -Algorithm SHA256
+Write-Output ("Built: {0}" -f $archivePath)
+Write-Output ("SHA256: {0}" -f $hash.Hash)

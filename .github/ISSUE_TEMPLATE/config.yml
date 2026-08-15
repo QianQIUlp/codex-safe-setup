@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Private security report
+    url: https://github.com/QianQIUlp/codex-safe-setup/security/advisories/new
+    about: Report sandbox bypasses, secret exposure, rule escapes, or destructive flaws privately.
+  - name: Questions and ideas
+    url: https://github.com/QianQIUlp/codex-safe-setup/discussions
+    about: Ask usage questions or discuss ideas before filing an issue.

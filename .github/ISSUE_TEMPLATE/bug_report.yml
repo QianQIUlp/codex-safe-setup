@@ -1,0 +1,82 @@
+name: Bug report
+description: Report a reproducible behavior that is not security-sensitive.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste credentials, personal data, or private source code. Report possible security vulnerabilities through the private Security Advisory link.
+  - type: input
+    id: version
+    attributes:
+      label: Codex Safe Setup version
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform and versions
+      description: Include OS, PowerShell, Git, and Codex CLI versions.
+      placeholder: Windows 11; PowerShell 7.5; Git 2.x; Codex CLI 0.147.0
+    validations:
+      required: true
+  - type: dropdown
+    id: profile
+    attributes:
+      label: Approval mode
+      options:
+        - BoundedAutonomy
+        - AskMe
+        - AutoReview
+        - Assessment only
+        - Unknown
+    validations:
+      required: true
+  - type: dropdown
+    id: network
+    attributes:
+      label: Command-network mode
+      options:
+        - "Off"
+        - Allowlist
+        - Unrestricted
+        - Not applicable
+        - Unknown
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Safe reproduction
+      description: Use a temporary Codex Home, temporary repository, and synthetic values.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Redacted output
+      description: Remove secrets, usernames, personal paths, account IDs, and private repository details.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety checks
+      options:
+        - label: I removed credentials and private data.
+          required: true
+        - label: This report does not describe a security vulnerability.
+          required: true

@@ -1,0 +1,6 @@
+/dist/
+/.tmp/
+*.log
+*.zip
+.DS_Store
+Thumbs.db

@@ -1,0 +1,37 @@
+name: Feature request
+description: Propose a safer workflow, platform improvement, or new verified control.
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user risk or workflow gap should be addressed?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Explain the user-visible behavior and required consent.
+    validations:
+      required: true
+  - type: textarea
+    id: boundary
+    attributes:
+      label: Security-boundary impact
+      description: State whether this changes filesystem access, network access, command rules, prerequisites, checkpoints, or rollback.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety checks
+      options:
+        - label: This proposal does not include real credentials or private data.
+          required: true
