@@ -69,6 +69,11 @@ Assert-True ($frontmatter.Groups['yaml'].Value -match '(?m)^name:\s*secure-codex
 Assert-True ($frontmatter.Groups['yaml'].Value -match '(?m)^description:\s*\S') 'Skill description is required.'
 Assert-True ($frontmatter.Groups['yaml'].Value -notmatch '(?m)^(?!name:|description:|\s*$)[A-Za-z0-9_-]+:') 'Skill frontmatter may contain only name and description.'
 Assert-True ($skillText -notmatch '\[TODO:') 'SKILL.md contains a TODO placeholder.'
+Assert-True ($skillText -match 'does not itself expand filesystem permissions or add deletion authority') 'Skill must distinguish network risk from filesystem authority.'
+Assert-True ($skillText -match 'prompt injection') 'Skill must disclose prompt-injection risk before unrestricted networking.'
+Assert-True ($skillText -match 'malware or vulnerable dependencies') 'Skill must disclose download and dependency risk before unrestricted networking.'
+Assert-True ($skillText -match 'choose `Custom` / `自定义`') 'Skill must require the Custom permission selection after installation.'
+Assert-True ($skillText -match '`codex-safe-workspace` is the selected profile') 'Skill must name the profile the user should activate.'
 
 $openAiYaml = [IO.File]::ReadAllText($openAiYamlPath)
 Assert-True ($openAiYaml -match '(?m)^\s*display_name:\s*"[^"]+"\s*$') 'openai.yaml display_name is required and must be quoted.'
@@ -93,5 +98,6 @@ foreach ($file in $powerShellFiles) {
 Write-Output 'PASS: plugin manifest and release metadata'
 Write-Output 'PASS: Git-backed marketplace metadata'
 Write-Output 'PASS: skill frontmatter and UI metadata'
+Write-Output 'PASS: unrestricted-network disclosure and Custom activation handoff'
 Write-Output 'PASS: required community and security documentation'
 Write-Output ("PASS: PowerShell syntax ({0} files)" -f $powerShellFiles.Count)
