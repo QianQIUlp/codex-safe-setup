@@ -1,0 +1,36 @@
+---
+interface Props {
+  id: string;
+  no: string;
+  eyebrow: string;
+  title: string;
+  lead?: string;
+  band?: 'default' | 'white';
+  variant?: 'default' | 'split';
+}
+
+const { id, no, eyebrow, title, lead, band = 'default', variant = 'default' } = Astro.props;
+---
+
+<section
+  class={`section band-${band} variant-${variant}`}
+  id={id}
+  aria-labelledby={`${id}-title`}
+>
+  <div class="container">
+    <div class="sec-frame">
+      <div class="sec-rail" aria-hidden="true">
+        <span class="rail-node">{no}</span>
+      </div>
+      <div class="sec-body">
+        <header class="sec-head">
+          <span class="sec-no" aria-hidden="true">{no}</span>
+          <p class="eyebrow">{eyebrow}</p>
+          <h2 class="sec-title" id={`${id}-title`}>{title}</h2>
+          {lead && <p class="sec-lead">{lead}</p>}
+        </header>
+        <slot />
+      </div>
+    </div>
+  </div>
+</section>

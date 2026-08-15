@@ -1,0 +1,49 @@
+---
+import type { BoundaryModule } from '../i18n/types';
+
+interface Props {
+  module: BoundaryModule;
+  flip?: boolean;
+}
+
+const { module: m, flip = false } = Astro.props;
+---
+
+<div class={`limit-module${flip ? ' flip' : ''}`} id={m.id}>
+  <div class="limit-copy">
+    <span class="mod-no" aria-hidden="true">{m.number}</span>
+    <p class="eyebrow">{m.eyebrow}</p>
+    <h3 class="limit-title">{m.title}</h3>
+    <p class="limit-lead">{m.lead}</p>
+    <p class="limit-note">{m.note}</p>
+  </div>
+
+  <div class="b-mini">
+    <div class="b-box">
+      <ul class="b-list">
+        {m.inside.map((item) => (
+          <li>
+            <span class="b-mark ok" aria-hidden="true">&#10003;</span>
+            <span>
+              {item.label}
+              {item.detail && <span class="b-item-detail"> — {item.detail}</span>}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+    <div class="b-denied">
+      <ul class="b-list">
+        {m.outside.map((item) => (
+          <li>
+            <span class="b-mark no" aria-hidden="true">&#215;</span>
+            <span>
+              {item.label}
+              {item.detail && <span class="b-item-detail"> — {item.detail}</span>}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </div>
+</div>

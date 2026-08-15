@@ -1,0 +1,18 @@
+---
+import type { UiContent } from '../i18n/types';
+import Section from './Section.astro';
+import BoundaryModule from './BoundaryModule.astro';
+
+interface Props {
+  content: UiContent;
+}
+
+const { content } = Astro.props;
+const t = content.limits;
+---
+
+<Section id="limits" no="02" eyebrow={t.eyebrow} title={t.title} lead={t.lead} band="default">
+  {t.modules.map((mod, index) => (
+    <BoundaryModule module={mod} flip={index === 1} />
+  ))}
+</Section>

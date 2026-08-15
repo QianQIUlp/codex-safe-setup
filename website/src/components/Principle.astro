@@ -1,0 +1,122 @@
+---
+import type { UiContent } from '../i18n/types';
+
+interface Props {
+  content: UiContent;
+}
+
+const { content } = Astro.props;
+const t = content.principle;
+const limitsHref = content.lang === 'en' ? '/#limits' : '/zh-CN/#limits';
+---
+
+<section class="section principle band-white" id="principle" aria-labelledby="principle-title">
+  <div class="container">
+    <div class="sec-frame">
+      <div class="sec-rail" aria-hidden="true">
+        <span class="rail-node">01</span>
+      </div>
+      <div class="sec-body">
+        <div class="principle-grid">
+          <div class="principle-statement">
+            <span class="sec-no" aria-hidden="true">01</span>
+            <h2 id="principle-title">{t.title}</h2>
+          </div>
+          <div class="principle-body">
+            {t.body.map((paragraph) => (
+              <p>{paragraph}</p>
+            ))}
+          </div>
+        </div>
+
+        <div class="principle-demo">
+          <div class="case-panel tone-warn">
+            <span class="case-label">{t.semantic.label}</span>
+            <p class="case-text">{t.semantic.intro}</p>
+            <pre class="case-code">{t.semantic.code.join('\n')}</pre>
+            <div class="case-reads">
+              <p class="case-reads-line looks">
+                <span class="reads-mark" aria-hidden="true">&#9675;</span>
+                <span>{t.semantic.looksLike}</span>
+              </p>
+              <p class="case-reads-line actual">
+                <span class="reads-mark" aria-hidden="true">&#215;</span>
+                <span>{t.semantic.actually}</span>
+              </p>
+            </div>
+            <div class="case-answer">
+              <span class="case-answer-label">{t.semantic.answer.caption}</span>
+              {t.semantic.answer.keyLines.map((line) => (
+                <code>{line}</code>
+              ))}
+              <p>{t.semantic.answer.explanation}</p>
+            </div>
+          </div>
+
+          <div class="risk-group">
+            <p class="risk-group-label">{t.accidents.label}</p>
+            <p class="risk-group-intro">{t.accidents.intro}</p>
+            {t.accidents.examples.map((example) => (
+              <div class="case-panel tone-neutral">
+                <span class="case-label">{example.label}</span>
+                <pre class="case-code">{example.code.join('\n')}</pre>
+                <div class="case-reads">
+                  <p class="case-reads-line looks">
+                    <span class="reads-mark" aria-hidden="true">&#9675;</span>
+                    <span>{example.looksLike}</span>
+                  </p>
+                  <p class="case-reads-line actual">
+                    <span class="reads-mark" aria-hidden="true">&#215;</span>
+                    <span>{example.actually}</span>
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div class="risk-group">
+            <p class="risk-group-label">{t.boundary.label}</p>
+            <p class="risk-group-intro">{t.boundary.intro}</p>
+            <div class="case-grid">
+              {t.boundary.examples.map((example) => (
+                <div class="case-panel tone-neutral">
+                  <span class="case-label">{example.label}</span>
+                  <pre class="case-code">{example.code.join('\n')}</pre>
+                  {example.decoded && example.decoded.length > 0 && (
+                    <div class="case-decoded">
+                      <span class="decoded-label">{example.decodedLabel}</span>
+                      {example.decoded.map((line) => (
+                        <code>{line}</code>
+                      ))}
+                    </div>
+                  )}
+                  <div class="case-reads">
+                    <p class="case-reads-line looks">
+                      <span class="reads-mark" aria-hidden="true">&#9675;</span>
+                      <span>{example.looksLike}</span>
+                    </p>
+                    <p class="case-reads-line actual">
+                      <span class="reads-mark" aria-hidden="true">&#215;</span>
+                      <span>{example.actually}</span>
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div class="case-panel tone-danger">
+              <span class="case-label">{t.boundary.incident.label}</span>
+              <p class="case-text">{t.boundary.incident.story}</p>
+              <p class="case-text strong">{t.boundary.incident.lesson}</p>
+            </div>
+          </div>
+
+          <p class="principle-closer">{t.closer}</p>
+          <p class="principle-cta">
+            <a class="link-arrow" href={limitsHref}>{t.cta}</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

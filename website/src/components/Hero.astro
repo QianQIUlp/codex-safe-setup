@@ -1,0 +1,82 @@
+---
+import type { UiContent } from '../i18n/types';
+
+interface Props {
+  content: UiContent;
+}
+
+const { content } = Astro.props;
+const t = content;
+---
+
+<section class="hero">
+  <div class="container hero-grid">
+    <div class="hero-copy">
+      <p class="hero-eyebrow">
+        {t.hero.eyebrow}
+        <span class="platform-tag">Windows</span>
+      </p>
+      <h1>{t.hero.title}</h1>
+      <p class="hero-lead">{t.hero.lead}</p>
+      <div class="hero-ctas">
+        <a class="btn btn-primary" href={t.hero.primaryCta.href}>{t.hero.primaryCta.label}</a>
+        <a
+          class="btn btn-secondary"
+          href={t.hero.secondaryCta.href}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {t.hero.secondaryCta.label}
+        </a>
+      </div>
+      <p>
+        <a class="link-arrow" href={t.hero.tertiaryCta.href}>{t.hero.tertiaryCta.label}</a>
+      </p>
+      <p class="hero-disclaimer">{t.hero.disclaimer}</p>
+    </div>
+
+    <div
+      class="boundary-visual"
+      role="img"
+      aria-label={t.hero.visual.ariaLabel}
+    >
+      <div class="b-box">
+        <div class="b-box-head">
+          <span class="b-agent">
+            <span class="dot" aria-hidden="true"></span>
+            {t.hero.visual.agentLabel} · {t.hero.visual.agentName}
+          </span>
+          <span class="b-zone">{t.hero.visual.insideLabel}</span>
+        </div>
+        <ul class="b-list">
+          {t.hero.visual.allowed.map((item) => (
+            <li>
+              <span class="b-mark ok" aria-hidden="true">&#10003;</span>
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div class="b-crossing">
+        <span class="b-block" aria-hidden="true">&#215;</span>
+        <span class="b-crossing-label">
+          <span>{t.hero.visual.deniedCrossing}</span>
+          <span class="b-crossing-detail">{t.hero.visual.crossingDetail}</span>
+        </span>
+      </div>
+
+      <div class="b-denied">
+        <span class="b-zone">{t.hero.visual.outsideLabel}</span>
+        <ul class="b-list">
+          {t.hero.visual.denied.map((item) => (
+            <li>
+              <span class="b-mark no" aria-hidden="true">&#215;</span>
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
