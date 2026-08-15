@@ -61,13 +61,6 @@ foreach ($domain in $AllowedDomain) {
     }
 }
 
-$unrestrictedRiskSummary = @(
-    'This network choice does not expand filesystem permissions or add deletion authority; existing workspace write and delete capability still applies.'
-    'The public-destination boundary is removed, so any data a command can already read or generate could be sent to any public Internet destination, including source, configuration, private data, command output, or credentials missed by filename deny rules.'
-    'Untrusted pages, issues, and dependency documentation can contain prompt injection; networked commands can also download malware, vulnerable dependencies, or license-restricted content.'
-    'Unrestricted access does not mean a leak will happen automatically, but it increases the possible consequence of human, model, or prompt-injection mistakes. Prefer Allowlist for normal work.'
-) -join ' '
-
 $approvalPolicy = 'never'
 $approvalReviewer = 'user'
 if ($ApprovalMode -eq 'AskMe') { $approvalPolicy = 'on-request' }
@@ -149,7 +142,6 @@ $plan = [pscustomobject]@{
     ApprovalReviewer = $approvalReviewer
     NetworkMode = $NetworkMode
     AllowedDomains = $AllowedDomain
-    NetworkRisk = $(if ($NetworkMode -eq 'Unrestricted') { $unrestrictedRiskSummary } else { 'No unrestricted command-network access selected.' })
     Filesystem = 'deny root; read minimal runtime; write workspace roots'
     ProtectWorkspaceSecrets = $ProtectWorkspaceSecrets
     AllowTempWrite = $AllowTempWrite
@@ -169,13 +161,7 @@ if ($PlanOnly) {
 
 if ($NetworkMode -eq 'Unrestricted' -and -not $AcknowledgeRisk) {
     if ($NonInteractive) { throw 'Unrestricted command networking requires -AcknowledgeRisk.' }
-    Write-Warning 'Unrestricted command-network risk disclosure:'
-    Write-Output '  - This choice does not expand filesystem permissions or add deletion authority; existing workspace write and delete capability still applies.'
-    Write-Output '  - Any data a command can already read or generate could be sent to any public Internet destination, including source, configuration, private data, command output, or credentials missed by filename deny rules.'
-    Write-Output '  - Prompt injection in pages, issues, or dependency documentation can induce exfiltration or unsafe commands.'
-    Write-Output '  - Networked commands can download malware, vulnerable dependencies, or license-restricted content.'
-    Write-Output '  - A leak is not automatic, but removing destination containment increases the consequence of mistakes. Prefer Allowlist for normal work.'
-    $riskAnswer = Read-Host 'I understand and accept unrestricted command-network risk. Continue? [y/N]'
+    $riskAnswer = Read-Host 'Unrestricted public outbound access can exfiltrate code or secrets. Continue? [y/N]'
     if ($riskAnswer -notmatch '^(?i:y|yes)$') { throw 'Installation cancelled.' }
 }
 if ($WindowsSandbox -eq 'Elevated' -and $env:OS -eq 'Windows_NT' -and -not $AcknowledgeAdminSetup) {
@@ -327,6 +313,4 @@ catch {
     CheckpointBridgeInstalled = $bridgeInstalled
     RuleInstalled = $ruleInstalled
     Verification = $(if (Get-Command codex -ErrorAction SilentlyContinue) { 'Run Test-CodexSafety.ps1 after restarting Codex.' } else { 'PARTIAL: install Codex CLI for rule verification.' })
-    RequiredPermissionSelection = 'Open the Codex permission selector, choose Custom, and confirm codex-safe-workspace is selected. Do not choose Full Access.'
-    RequiredRestart = 'Start a new Codex task or CLI session; the current execution environment does not retroactively adopt the new profile.'
 }

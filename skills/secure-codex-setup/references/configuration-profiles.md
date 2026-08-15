@@ -16,21 +16,9 @@ Auto-review is a reviewer substitution. It does not alter filesystem, network, p
 |---|---|---|
 | `Off` | Commands cannot reach the network | None |
 | `Allowlist` | Proxy permits only named public domains | Explicit domains |
-| `Unrestricted` | Proxy allows all public domains with `"*" = "allow"` | Full disclosure, then high-risk acknowledgement |
+| `Unrestricted` | Commands have direct outbound access | High-risk acknowledgement |
 
 A domain table without an active proxy is not an enforced allowlist.
-
-### Required unrestricted-network disclosure
-
-Explain all of the following before asking the user to acknowledge `Unrestricted`:
-
-1. The network choice does not widen the filesystem profile and does not grant a new deletion capability. Existing workspace write access still permits changes and deletions inside that boundary.
-2. The `*` rule removes the public-destination restriction. Anything a command can already read or generate can be sent to any public destination, including source, configuration, command output, private information, and credentials with names that evade the deny globs.
-3. Untrusted pages, issue text, and dependency documentation can carry prompt injection. A manipulated agent can exfiltrate data or execute unsafe networked steps.
-4. Internet access can download malware or vulnerable dependencies and can pull license-restricted content into the workspace.
-5. These are possible consequences, not a claim that enabling network automatically deletes or leaks data. `Allowlist` materially limits destinations and remains the normal recommendation.
-
-This matches OpenAI's documented internet-access risks and its recommendation to allow only necessary domains and methods: [Agent internet access](https://learn.chatgpt.com/docs/cloud/internet-access). The local command proxy covers sandboxed scripts, programs, and child processes only; separate tools require separate controls: [Agent approvals and security](https://learn.chatgpt.com/docs/agent-approvals-security).
 
 ## Filesystem policy
 

@@ -10,9 +10,7 @@ Codex Safe Setup reduces the consequences of human or agent mistakes by installi
 | Deletion inside the project | Hidden Git checkpoint ref | Ignored and refused sensitive files are not captured |
 | Reading credentials outside the project | Root deny plus minimal runtime reads | The runtime-defined minimal set must be trusted |
 | Reading project secrets | Workspace-relative deny globs | Unknown filenames need custom deny entries |
-| Shell-based exfiltration | Network off or enforced allowlist | Allowed domains can still receive data; wildcard public access removes destination containment |
-| Network prompt injection | Keep command networking narrow and treat remote content as untrusted | Allowed remote content can still manipulate an agent |
-| Malicious or vulnerable downloads | Restrict destinations and review dependency changes | An allowed source can still be compromised |
+| Shell-based exfiltration | Network off or enforced allowlist | Allowed domains can still receive data |
 | Approval or reviewer error | Hard sandbox boundary | In-boundary actions do not receive extra review |
 | Rule abuse | Exact executable and bridge prefix | Rules are experimental and need upgrade checks |
 
