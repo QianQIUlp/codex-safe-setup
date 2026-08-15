@@ -47,8 +47,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $archive = Get-ChildItem -LiteralPath ./dist -Filter '*.zip' | Select-Object -First 1
-          if ($null -eq $archive) {
-            throw 'Release archive is missing.'
+          $assets = @(Get-ChildItem -LiteralPath ./dist -File)
+          if ($assets.Count -ne 2) {
+            throw 'Expected one release archive and one SHA-256 checksum.'
           }
-          gh release upload "${{ inputs.tag }}" $archive.FullName --clobber
+          foreach ($asset in $assets) {
+            gh release upload "${{ inputs.tag }}" $asset.FullName --clobber
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to upload $($asset.Name)."
+            }
+          }

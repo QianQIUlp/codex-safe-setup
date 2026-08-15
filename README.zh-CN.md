@@ -27,6 +27,8 @@ codex plugin add codex-safe-setup@codex-safe-setup
 
 也可以从 [Releases](https://github.com/QianQIUlp/codex-safe-setup/releases) 下载可安装 ZIP。推荐 marketplace 安装方式，因为 Codex 能记录来源和版本。
 
+每个 Release 都附带 `.sha256` 文件。可在 PowerShell 中运行 `Get-FileHash -Algorithm SHA256 <压缩包>` 核对下载内容。
+
 ## 你会做出的选择
 
 审批方式和命令联网是两个独立维度：

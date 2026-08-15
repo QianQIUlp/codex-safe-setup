@@ -25,11 +25,15 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 [void](New-Item -ItemType Directory -Path $OutputDirectory -Force)
 $resolvedOutput = (Resolve-Path -LiteralPath $OutputDirectory).Path
 $archivePath = Join-Path $resolvedOutput ("codex-safe-setup-v{0}.zip" -f $Version)
-if (Test-Path -LiteralPath $archivePath) {
+$checksumPath = $archivePath + '.sha256'
+$existingOutputs = @(@($archivePath, $checksumPath) | Where-Object { Test-Path -LiteralPath $_ })
+if ($existingOutputs.Count -gt 0) {
     if (-not $Force) {
-        throw "Archive already exists: $archivePath. Use -Force to replace this exact file."
+        throw "Release output already exists: $($existingOutputs -join ', '). Use -Force to replace only these exact files."
     }
-    Remove-Item -LiteralPath $archivePath -Force
+    foreach ($existingOutput in $existingOutputs) {
+        Remove-Item -LiteralPath $existingOutput -Force
+    }
 }
 
 $temporaryRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
@@ -75,5 +79,11 @@ finally {
 }
 
 $hash = Get-FileHash -LiteralPath $archivePath -Algorithm SHA256
+[IO.File]::WriteAllText(
+    $checksumPath,
+    ("{0}  {1}{2}" -f $hash.Hash.ToLowerInvariant(), (Split-Path -Leaf $archivePath), [Environment]::NewLine),
+    [Text.UTF8Encoding]::new($false)
+)
 Write-Output ("Built: {0}" -f $archivePath)
 Write-Output ("SHA256: {0}" -f $hash.Hash)
+Write-Output ("Checksum: {0}" -f $checksumPath)

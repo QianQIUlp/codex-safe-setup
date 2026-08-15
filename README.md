@@ -31,6 +31,8 @@ Use $secure-codex-setup to audit my current permissions and install the recommen
 
 You can also download the install-ready ZIP from [Releases](https://github.com/QianQIUlp/codex-safe-setup/releases). The marketplace method is preferred because Codex can track the plugin source and version.
 
+Each release includes a `.sha256` file. Verify the downloaded archive on PowerShell with `Get-FileHash -Algorithm SHA256 <archive>`.
+
 ## What the setup asks you to choose
 
 Approval mode and command networking are separate decisions:
