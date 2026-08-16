@@ -72,8 +72,10 @@ Assert-True ($skillText -notmatch '\[TODO:') 'SKILL.md contains a TODO placehold
 Assert-True ($skillText -match 'does not itself expand filesystem permissions or add deletion authority') 'Skill must distinguish network risk from filesystem authority.'
 Assert-True ($skillText -match 'prompt injection') 'Skill must disclose prompt-injection risk before unrestricted networking.'
 Assert-True ($skillText -match 'malware or vulnerable dependencies') 'Skill must disclose download and dependency risk before unrestricted networking.'
-Assert-True ($skillText -match 'choose `Custom` / `自定义`') 'Skill must require the Custom permission selection after installation.'
+Assert-True ($skillText -match 'choose `Custom`') 'Skill must require the Custom permission selection after installation.'
 Assert-True ($skillText -match '`codex-safe-workspace` is the selected profile') 'Skill must name the profile the user should activate.'
+Assert-True ($skillText -match 'fully quit every Codex desktop window and CLI process') 'Skill must require a complete Windows process shutdown after installation.'
+Assert-True ($skillText -match 'Repeated administrator prompts are a failure signal') 'Skill must treat repeated elevation prompts as a diagnosable failure.'
 
 $openAiYaml = [IO.File]::ReadAllText($openAiYamlPath)
 Assert-True ($openAiYaml -match '(?m)^\s*display_name:\s*"[^"]+"\s*$') 'openai.yaml display_name is required and must be quoted.'
@@ -157,6 +159,6 @@ Write-Output 'PASS: ZCode edition disclosure and activation handoff'
 Write-Output 'PASS: plugin manifest and release metadata'
 Write-Output 'PASS: Git-backed marketplace metadata'
 Write-Output 'PASS: skill frontmatter and UI metadata'
-Write-Output 'PASS: unrestricted-network disclosure and Custom activation handoff'
+Write-Output 'PASS: unrestricted-network disclosure and Windows Custom activation handoff'
 Write-Output 'PASS: required community and security documentation'
 Write-Output ("PASS: PowerShell syntax ({0} files)" -f $powerShellFiles.Count)

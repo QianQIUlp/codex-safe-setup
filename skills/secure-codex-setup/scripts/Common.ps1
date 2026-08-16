@@ -275,6 +275,109 @@ function Test-CssSensitiveRelativePath {
     return $false
 }
 
+function ConvertTo-CssNormalizedPortSet {
+    param([AllowEmptyString()][string]$Ports)
+
+    if (-not $Ports) { return '' }
+    $normalized = @(
+        $Ports -split ',' |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ -match '^\d+$' } |
+            ForEach-Object { [int]$_ } |
+            Sort-Object -Unique
+    )
+    return $normalized -join ','
+}
+
+function Get-CssWindowsSandboxSetupHealth {
+    param(
+        [Parameter(Mandatory)][string]$CodexHome,
+        [int[]]$ExpectedProxyPort = @()
+    )
+
+    $expected = ConvertTo-CssNormalizedPortSet -Ports ($ExpectedProxyPort -join ',')
+    $emptyResult = [ordered]@{
+        Available = $false
+        Status = 'UNAVAILABLE'
+        EventCount = 0
+        PortOscillationDetected = $false
+        LatestStoredPorts = $null
+        LatestDesiredPorts = $null
+        ExpectedProxyPorts = $(if ($expected) { $expected } else { $null })
+        LatestDesiredMatchesExpected = $null
+        Evidence = 'No readable Windows sandbox setup log was found.'
+    }
+    if ($env:OS -ne 'Windows_NT') {
+        $emptyResult.Status = 'NOT_APPLICABLE'
+        $emptyResult.Evidence = 'Windows sandbox setup telemetry is not applicable on this platform.'
+        return [pscustomobject]$emptyResult
+    }
+
+    $sandboxRoot = Join-Path $CodexHome '.sandbox'
+    try {
+        $logFiles = @(Get-ChildItem -LiteralPath $sandboxRoot -Filter 'sandbox*.log' -File -ErrorAction Stop | Sort-Object LastWriteTimeUtc, FullName)
+    }
+    catch {
+        return [pscustomobject]$emptyResult
+    }
+    if ($logFiles.Count -eq 0) { return [pscustomobject]$emptyResult }
+
+    $events = [Collections.Generic.List[object]]::new()
+    $pattern = '^\[(?<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?) [^\]]+\] sandbox setup required: offline firewall settings changed \(stored_ports=\[(?<stored>[^\]]*)\], desired_ports=\[(?<desired>[^\]]*)\],'
+    foreach ($logFile in $logFiles) {
+        try {
+            foreach ($line in [IO.File]::ReadLines($logFile.FullName)) {
+                $match = [regex]::Match($line, $pattern)
+                if (-not $match.Success) { continue }
+                $events.Add([pscustomobject]@{
+                    Timestamp = $match.Groups['timestamp'].Value
+                    StoredPorts = ConvertTo-CssNormalizedPortSet -Ports $match.Groups['stored'].Value
+                    DesiredPorts = ConvertTo-CssNormalizedPortSet -Ports $match.Groups['desired'].Value
+                })
+            }
+        }
+        catch {
+            # Keep any safely extracted setup events from other readable logs.
+        }
+    }
+
+    if ($events.Count -eq 0) {
+        $emptyResult.Available = $true
+        $emptyResult.Status = 'NO_EVENTS'
+        $emptyResult.Evidence = 'Sandbox logs are readable, but no firewall port-change setup event was found.'
+        return [pscustomobject]$emptyResult
+    }
+
+    $oscillation = $false
+    for ($index = 1; $index -lt $events.Count; $index++) {
+        $previous = $events[$index - 1]
+        $current = $events[$index]
+        if ($previous.StoredPorts -eq $current.DesiredPorts -and $previous.DesiredPorts -eq $current.StoredPorts -and $previous.StoredPorts -ne $previous.DesiredPorts) {
+            $oscillation = $true
+            break
+        }
+    }
+
+    $latest = $events[$events.Count - 1]
+    $matchesExpected = if ($expected) { $latest.DesiredPorts -eq $expected } else { $null }
+    $status = if ($expected -and -not $matchesExpected) { 'CONFLICT' } elseif ($oscillation) { 'OSCILLATION_HISTORY' } else { 'ALIGNED' }
+    $evidence = "Observed $($events.Count) firewall port-change setup event(s); latest stored [$($latest.StoredPorts)] -> desired [$($latest.DesiredPorts)]."
+    if ($expected) { $evidence += " Managed proxy expectation: [$expected]." }
+    if ($oscillation) { $evidence += ' A direct port-set reversal was detected; stale or concurrent Codex processes can repeatedly invalidate elevated setup.' }
+
+    return [pscustomobject]@{
+        Available = $true
+        Status = $status
+        EventCount = $events.Count
+        PortOscillationDetected = $oscillation
+        LatestStoredPorts = $latest.StoredPorts
+        LatestDesiredPorts = $latest.DesiredPorts
+        ExpectedProxyPorts = $(if ($expected) { $expected } else { $null })
+        LatestDesiredMatchesExpected = $matchesExpected
+        Evidence = $evidence
+    }
+}
+
 function New-CssCheck {
     param(
         [Parameter(Mandatory)][ValidateSet('PASS', 'PARTIAL', 'FAIL', 'NOT CONTROLLED')][string]$Status,

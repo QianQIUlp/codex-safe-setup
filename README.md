@@ -85,7 +85,9 @@ The skill reports each control as:
 - `FAIL`: a required condition is missing or contradictory.
 - `NOT CONTROLLED`: the capability belongs to another control surface.
 
-Static configuration and `codex execpolicy check` are evidence, not proof of every future runtime behavior. After installation, open the Codex permission selector, choose **Custom**, confirm that `codex-safe-workspace` is selected, and start a new task or CLI session before runtime probes. Do not switch back to Full Access.
+Static configuration and `codex execpolicy check` are evidence, not proof of every future runtime behavior. After installation, open the Codex permission selector, choose **Custom**, and confirm that `codex-safe-workspace` is selected. On Windows, restart Codex and start a new task before runtime probes; do not resume a pre-install task. If administrator prompts repeat, fully quit every Codex desktop window and CLI process before one clean relaunch. On other platforms, start a new task or CLI session. Do not switch back to Full Access.
+
+The preferred Windows `Elevated` sandbox uses administrator-approved OS setup; it does not require elevation for each workspace command. If administrator prompts repeat, run the assessment and inspect `WindowsSandboxSetupHealth`. Historical port changes with an aligned latest setup are informational and require no action. A current conflict or continued reversal between loopback proxy port sets means old and new Codex processes may be alternately invalidating the global firewall setup; close all Codex processes and relaunch once before considering the weaker `Unelevated` fallback.
 
 The optional checkpoint bridge snapshots tracked and ordinary untracked files to hidden refs under `refs/codex-safe/checkpoints/*`. It refuses sensitive-looking untracked files and never performs automatic `reset --hard`, `clean`, branch replacement, or in-place checkout. See [How it works](docs/how-it-works.md).
 

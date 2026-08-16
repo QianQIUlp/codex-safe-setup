@@ -48,6 +48,8 @@ $networkSectionText = Get-CssTomlSectionText -Text $configText -Section 'permiss
 $featuresSectionText = Get-CssTomlSectionText -Text $configText -Section 'features'
 $networkEnabled = $networkSectionText -match '(?m)^\s*enabled\s*=\s*true'
 $networkProxy = $featuresSectionText -match '(?m)^\s*network_proxy\s*=\s*true'
+$windowsSandbox = $(if ($windowsMatch.Success) { $windowsMatch.Groups[1].Value } else { $null })
+$sandboxSetupHealth = Get-CssWindowsSandboxSetupHealth -CodexHome $resolvedHome -ExpectedProxyPort $(if ($networkProxy) { @(3128, 8081) } else { @() })
 
 $knownSensitiveLocations = @()
 $userProfilePath = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)
@@ -66,6 +68,12 @@ if (-not $managedProfile) { $findings.Add([pscustomobject]@{ Severity = 'MEDIUM'
 if (-not $codexCli.Present) { $findings.Add([pscustomobject]@{ Severity = 'INFO'; Finding = 'Codex CLI is absent, so rule and version checks will be partial.' }) }
 elseif (-not $codexVersionSupported) { $findings.Add([pscustomobject]@{ Severity = 'HIGH'; Finding = 'Detected Codex CLI does not prove support for permission profiles (minimum recognized version: 0.138.0).' }) }
 if ($env:OS -eq 'Windows_NT' -and -not $powershell7.Present) { $findings.Add([pscustomobject]@{ Severity = 'INFO'; Finding = 'PowerShell 7 is absent; bootstrap can continue with reduced shell consistency.' }) }
+if ($windowsSandbox -eq 'elevated' -and $sandboxSetupHealth.Status -eq 'CONFLICT') {
+    $findings.Add([pscustomobject]@{ Severity = 'HIGH'; Finding = 'The latest elevated Windows sandbox firewall setup uses proxy ports that conflict with the managed profile. Fully quit every Codex desktop and CLI process, relaunch once, and approve the setup prompt once.' })
+}
+elseif ($windowsSandbox -eq 'elevated' -and $sandboxSetupHealth.PortOscillationDetected) {
+    $findings.Add([pscustomobject]@{ Severity = 'INFO'; Finding = 'Elevated sandbox firewall ports changed in both directions in the past, but the latest setup is aligned. No action is required unless administrator prompts repeat.' })
+}
 
 $report = [pscustomobject]@{
     TimestampUtc = [DateTime]::UtcNow.ToString('o')
@@ -80,7 +88,8 @@ $report = [pscustomobject]@{
     ApprovalReviewer = $(if ($reviewerMatch.Success) { $reviewerMatch.Groups[1].Value } else { $null })
     CommandNetworkEnabled = [bool]$networkEnabled
     NetworkProxyEnabled = [bool]$networkProxy
-    WindowsSandbox = $(if ($windowsMatch.Success) { $windowsMatch.Groups[1].Value } else { $null })
+    WindowsSandbox = $windowsSandbox
+    WindowsSandboxSetupHealth = $sandboxSetupHealth
     SensitiveLocationCount = $knownSensitiveLocations.Count
     SensitiveLocationPaths = $knownSensitiveLocations
     ExternalSurfaces = [pscustomobject]@{
@@ -111,6 +120,7 @@ Write-Output ("Full Access: {0}" -f $report.FullAccessDetected)
 Write-Output ("Permission profile: {0}" -f $(if ($report.PermissionProfile) { $report.PermissionProfile } else { '<not set>' }))
 Write-Output ("Approval: {0} / reviewer: {1}" -f $(if ($report.ApprovalPolicy) { $report.ApprovalPolicy } else { '<not set>' }), $(if ($report.ApprovalReviewer) { $report.ApprovalReviewer } else { '<not set>' }))
 Write-Output ("Command network: {0}; proxy: {1}" -f $report.CommandNetworkEnabled, $report.NetworkProxyEnabled)
+Write-Output ("Windows sandbox setup: {0} - {1}" -f $sandboxSetupHealth.Status, $sandboxSetupHealth.Evidence)
 Write-Output ("PowerShell 7: {0}; Codex CLI: {1}; Git: {2}" -f $powershell7.Present, $codexCli.Present, $gitCli.Present)
 Write-Output ("Known sensitive locations present (contents not read): {0}" -f $knownSensitiveLocations.Count)
 foreach ($finding in $findings) { Write-Output ("[{0}] {1}" -f $finding.Severity, $finding.Finding) }
