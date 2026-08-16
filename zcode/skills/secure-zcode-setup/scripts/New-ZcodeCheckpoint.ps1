@@ -22,9 +22,11 @@ $ErrorActionPreference = 'Stop'
 function Get-CanonicalRepositoryRoot {
     param([string]$Path, [string]$GitExecutable)
     $resolvedPath = (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path
-    $root = (& $GitExecutable -C $resolvedPath rev-parse --show-toplevel 2>$null | Select-Object -First 1)
-    if ($LASTEXITCODE -ne 0 -or -not $root) { throw "Not a Git worktree: $resolvedPath" }
-    return [IO.Path]::GetFullPath($root.Trim())
+    # Piping a native command into Select-Object -First stops the pipeline early
+    # and leaves $LASTEXITCODE unset (pwsh 7.6 StrictMode throws); capture fully first.
+    $output = @(& $GitExecutable -C $resolvedPath rev-parse --show-toplevel 2>$null)
+    if ($LASTEXITCODE -ne 0 -or -not $output) { throw "Not a Git worktree: $resolvedPath" }
+    return [IO.Path]::GetFullPath(($output | Select-Object -First 1).Trim())
 }
 
 function Invoke-GitChecked {
