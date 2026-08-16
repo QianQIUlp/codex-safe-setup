@@ -55,7 +55,7 @@ foreach ($secret in @($state.SecretFilesDenied)) {
 }
 $checks.Add((New-ZssCheck -Status $(if ($deniedOk) { 'PASS' } else { 'PARTIAL' }) `
     -Control 'Secret files carry deny ACEs' `
-    -Evidence $(if ($deniedOk) { "all $($state.SecretFilesDenied.Count) recorded files deny $userName" } else { "ACE missing on: $($deniedMissing -join ', ')" })))
+    -Evidence $(if ($deniedOk) { "all $(@($state.SecretFilesDenied).Count) recorded files deny $userName" } else { "ACE missing on: $($deniedMissing -join ', ')" })))
 
 $launcherOk = Test-Path -LiteralPath $state.LauncherPath -PathType Leaf
 $shortcutOk = Test-Path -LiteralPath $state.ShortcutPath -PathType Leaf
@@ -93,14 +93,17 @@ T 'read-denied-secret' { Get-Content 'FIRSTSECRET' -ErrorAction Stop }
 $r | Set-Content 'SCRATCH\probe-result.txt'
 '@
 $firstSecret = if (@($state.SecretFilesDenied).Count) { @($state.SecretFilesDenied)[0] } else { $canaryLiteral }
-$probeText = $probeTemplate `
-    -replace 'CANARY', $canaryLiteral.Replace('\', '\') `
-    -replace 'MAINPROFILE', $mainProfile `
-    -replace 'STATEROOT', $stateRoot `
-    -replace 'INSTALLDIR', $state.SandboxInstallDir `
-    -replace 'FIRSTROOT', (@($state.WorkspaceRoots)[0]) `
-    -replace 'FIRSTSECRET', $firstSecret `
-    -replace 'SCRATCH', $probeScratch
+# Ordinal .Replace, NOT -replace: the regex operator is case-insensitive, so the
+# placeholders CANARY/INSTALLDIR also match inside the lowercase probe names
+# ('read-canary', 'read-installdir-write'), corrupting the result keys.
+$probeText = $probeTemplate
+$probeText = $probeText.Replace('CANARY', $canaryLiteral)
+$probeText = $probeText.Replace('MAINPROFILE', $mainProfile)
+$probeText = $probeText.Replace('STATEROOT', $stateRoot)
+$probeText = $probeText.Replace('INSTALLDIR', $state.SandboxInstallDir)
+$probeText = $probeText.Replace('FIRSTROOT', @($state.WorkspaceRoots)[0])
+$probeText = $probeText.Replace('FIRSTSECRET', $firstSecret)
+$probeText = $probeText.Replace('SCRATCH', $probeScratch)
 $probeText | Set-Content -LiteralPath $probeScript
 
 try {
