@@ -229,7 +229,12 @@ unified_exec = true
     try { & $zcodeInstall -WorkspacePath $zcodeRepo -ZcodeHome $zcodeHome -ZCodeSourceDir (Join-Path $temporaryRoot 'missing-zcode') -PlanOnly | Out-Null } catch { $zcodeMissingSourceRefused = $true }
     Assert-True $zcodeMissingSourceRefused 'ZCode installer must refuse a missing ZCode source executable.'
 
-    $zcodePlan = @(& $zcodeInstall -WorkspacePath $zcodeRepo -ZcodeHome $zcodeHome -SandboxInstallDir 'C:\Program Files\ZCodeSandboxTestUnused' -SandboxUserName 'zss-test-user' -PlanOnly) -join [Environment]::NewLine
+    # machine-independent fake source for the happy path (CI runners have no ZCode)
+    $zcodeFakeSource = Join-Path $temporaryRoot 'fake-zcode'
+    New-Item -ItemType Directory -Path $zcodeFakeSource -Force | Out-Null
+    [IO.File]::WriteAllText((Join-Path $zcodeFakeSource 'ZCode.exe'), 'placeholder', [Text.UTF8Encoding]::new($false))
+
+    $zcodePlan = @(& $zcodeInstall -WorkspacePath $zcodeRepo -ZcodeHome $zcodeHome -ZCodeSourceDir $zcodeFakeSource -SandboxInstallDir 'C:\Program Files\ZCodeSandboxTestUnused' -SandboxUserName 'zss-test-user' -PlanOnly) -join [Environment]::NewLine
     Assert-True ($zcodePlan -match 'does not filter network') 'ZCode plan must disclose that the cage does not filter network traffic.'
     Assert-True ($zcodePlan -match 'NOT CONTROLLED') 'ZCode plan must keep the honest NOT CONTROLLED vocabulary.'
     Assert-True ($zcodePlan -match 'Program Files') 'ZCode plan must show the admin-controlled install copy.'
