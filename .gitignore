@@ -4,3 +4,6 @@
 *.zip
 .DS_Store
 Thumbs.db
+
+# ZCode client workspace artifacts
+.zcode/
