@@ -198,7 +198,9 @@ try {
     Write-ZssTextAtomic -Path $canaryPath -Text ("Synthetic canary only: {0}" -f [guid]::NewGuid().ToString('N'))
     $completed.Add("canary:$canaryPath")
 
-    # 7. launcher + bridge
+    # 7. launcher + bridge (the launcher dot-sources Common.ps1, so it must sit beside it)
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Common.ps1') -Destination (Join-Path $binRoot 'Common.ps1') -Force
+    $completed.Add("common:$(Join-Path $binRoot 'Common.ps1')")
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Start-ZcodeSandboxed.ps1') -Destination (Join-Path $binRoot 'Start-ZcodeSandboxed.ps1') -Force
     $completed.Add("launcher:$(Join-Path $binRoot 'Start-ZcodeSandboxed.ps1')")
     if ($InstallCheckpoints) {
@@ -262,7 +264,7 @@ catch {
         }
     }
     foreach ($entry in $completed) {
-        if ($entry -like 'authorized:*' -or $entry -like 'bridge:*' -or $entry -like 'launcher:*' -or $entry -like 'credential:*' -or $entry -like 'canary:*') {
+        if ($entry -like 'authorized:*' -or $entry -like 'bridge:*' -or $entry -like 'launcher:*' -or $entry -like 'common:*' -or $entry -like 'credential:*' -or $entry -like 'canary:*') {
             $value = $entry -split ':', 2 | Select-Object -Last 1
             Remove-Item -LiteralPath $value -Force -ErrorAction SilentlyContinue
         }

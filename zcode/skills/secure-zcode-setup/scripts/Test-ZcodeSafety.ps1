@@ -57,10 +57,11 @@ $checks.Add((New-ZssCheck -Status $(if ($deniedOk) { 'PASS' } else { 'PARTIAL' }
     -Control 'Secret files carry deny ACEs' `
     -Evidence $(if ($deniedOk) { "all $(@($state.SecretFilesDenied).Count) recorded files deny $userName" } else { "ACE missing on: $($deniedMissing -join ', ')" })))
 
-$launcherOk = Test-Path -LiteralPath $state.LauncherPath -PathType Leaf
+$launcherOk = (Test-Path -LiteralPath $state.LauncherPath -PathType Leaf) -and
+    (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $state.LauncherPath) 'Common.ps1') -PathType Leaf)
 $shortcutOk = Test-Path -LiteralPath $state.ShortcutPath -PathType Leaf
 $checks.Add((New-ZssCheck -Status $(if ($launcherOk -and $shortcutOk) { 'PASS' } else { 'PARTIAL' }) `
-    -Control 'Launcher and shortcut present' -Evidence "launcher=$launcherOk shortcut=$shortcutOk"))
+    -Control 'Launcher and shortcut present' -Evidence "launcher(+Common.ps1)=$launcherOk shortcut=$shortcutOk"))
 
 if ($state.BridgePath) {
     $bridgeOk = Test-Path -LiteralPath $state.BridgePath -PathType Leaf
