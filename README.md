@@ -113,3 +113,36 @@ The project is licensed under [Apache-2.0](LICENSE).
 ## References
 
 The implementation follows current OpenAI documentation for [plugins and marketplace distribution](https://developers.openai.com/plugins/build/plugins), [skills](https://learn.chatgpt.com/docs/build-skills), [permission profiles](https://learn.chatgpt.com/docs/permissions), [sandboxing and approvals](https://learn.chatgpt.com/docs/agent-approvals-security), [Windows sandboxing](https://learn.chatgpt.com/docs/windows/windows-sandbox), and [command rules](https://learn.chatgpt.com/docs/agent-configuration/rules). These surfaces evolve; rerun verification after Codex upgrades.
+
+## ZCode edition (OS sandbox, Windows)
+
+The same philosophy for ZCode, different mechanics: ZCode has no configuration-file
+permission surface like Codex `config.toml` profiles, so the boundary is enforced by
+**Windows itself**. The ZCode edition installs an *OS cage*:
+
+- a dedicated **standard (non-administrator) local user** that runs ZCode;
+- your profile, `~/.ssh`, `~/.aws`, and ZCode credentials become **unreadable** to agent
+  sessions - enforced by NTFS, not by model behavior;
+- explicit Modify ACLs on the workspace roots you register, deny ACEs on existing
+  secret-like files inside them;
+- ZCode runs from an **admin-controlled copy** under `C:\Program Files\ZCodeSandbox`
+  (required on machines that block execution from user-writable paths);
+- one UAC prompt during install, DPAPI-protected launcher credential, Start Menu
+  shortcut **"ZCode (Sandboxed)"**, exact rollback, and optional branch/index-neutral
+  Git checkpoints (`refs/zcode-safe/*`).
+
+Install it as a ZCode plugin: open **Settings -> Plugin Management -> Discover -> +**,
+add this GitHub repository (or the local checkout) as a marketplace, then install
+**ZCode Safe Setup**. In ZCode run `/zcode-safe-setup`, or ask:
+
+```text
+Use secure-zcode-setup to audit my exposure and install the OS cage.
+```
+
+Honest limits: network egress stays **NOT CONTROLLED** (Windows Firewall cannot scope
+by user for one executable path), secret files created after install are not covered,
+and only sessions launched through the sandbox shortcut are inside the cage. See
+[docs/zcode-probe/PROBE-REPORT.md](docs/zcode-probe/PROBE-REPORT.md) for the
+machine-verified feasibility evidence and
+[zcode/skills/secure-zcode-setup/references/os-boundary-model.md](zcode/skills/secure-zcode-setup/references/os-boundary-model.md)
+for the Codex-to-NTFS boundary mapping.

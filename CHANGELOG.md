@@ -2,6 +2,14 @@
 
 All notable changes are documented here. Releases follow semantic versioning.
 
+## 0.2.0 - Unreleased (feat/zcode-safe-setup branch)
+
+- Add the ZCode edition as a native plugin (zcode/): an OS-enforced cage for ZCode on Windows - dedicated standard user, NTFS workspace grants, secret deny ACEs, admin-controlled Program Files install copy, DPAPI launcher credential, Start Menu shortcut, and exact rollback.
+- Optional branch/index-neutral Git checkpoints under refs/zcode-safe/* with repository authorization, sensitive-file refusal, and pinned Git verification.
+- Honest verification vocabulary retained: network egress, post-install secrets, and main-user sessions are reported NOT CONTROLLED.
+- Add the ZCode marketplace files (.claude-plugin/ and .zcode-plugin/), package validation, headless test coverage, release packaging, and the machine-verified feasibility probe report under docs/zcode-probe/.
+- Codex edition unchanged.
+
 ## 0.1.1 - 2026-08-15
 
 - Explain the concrete consequences of unrestricted command networking before acknowledgement: destination-unbounded exfiltration, prompt injection, unsafe downloads, and license risk.

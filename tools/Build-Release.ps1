@@ -41,7 +41,7 @@ $stagingPath = Join-Path $temporaryRoot ("codex-safe-setup-package-{0}" -f [guid
 [void](New-Item -ItemType Directory -Path $stagingPath)
 
 try {
-    foreach ($directory in @('.codex-plugin', 'skills')) {
+    foreach ($directory in @('.codex-plugin', 'skills', 'zcode', '.claude-plugin', '.zcode-plugin')) {
         Copy-Item -LiteralPath (Join-Path $repositoryRoot $directory) -Destination $stagingPath -Recurse -Force
     }
     foreach ($file in @('README.md', 'README.zh-CN.md', 'LICENSE', 'PRIVACY.md', 'SECURITY.md')) {
@@ -64,6 +64,15 @@ try {
         }
         if ($entryNames -notcontains 'skills/secure-codex-setup/SKILL.md') {
             throw 'Built archive is missing the secure-codex-setup skill.'
+        }
+        if ($entryNames -notcontains 'zcode/.zcode-plugin/plugin.json') {
+            throw 'Built archive is missing the ZCode edition plugin manifest.'
+        }
+        if ($entryNames -notcontains 'zcode/skills/secure-zcode-setup/SKILL.md') {
+            throw 'Built archive is missing the ZCode edition skill.'
+        }
+        if ($entryNames -notcontains '.claude-plugin/marketplace.json') {
+            throw 'Built archive is missing the ZCode marketplace file.'
         }
     }
     finally {

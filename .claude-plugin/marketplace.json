@@ -1,0 +1,16 @@
+{
+  "name": "codex-safe-setup",
+  "version": 1,
+  "plugins": [
+    {
+      "name": "zcode-safe-setup",
+      "source": "./zcode",
+      "version": "0.1.0",
+      "description": "OS-enforced ZCode boundary: dedicated low-privilege Windows user, NTFS ACL grants, secret deny ACEs, Program Files launcher copy, Git checkpoints.",
+      "author": { "name": "QianQIUlp", "url": "https://github.com/QianQIUlp" },
+      "category": "guides",
+      "displayName": "ZCode Safe Setup",
+      "displayName_i18n": { "zh-CN": "ZCode 安全边界" }
+    }
+  ]
+}

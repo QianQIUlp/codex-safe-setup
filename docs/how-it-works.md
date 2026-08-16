@@ -85,3 +85,31 @@ Exact locations depend on `CODEX_HOME`, which defaults to the normal Codex user 
 - `skills/secure-codex-setup/references/`: detailed profile, security, and recovery guidance loaded when needed.
 - `tests/`: isolated integration and package checks.
 - `tools/Build-Release.ps1`: install-ready ZIP builder.
+
+## ZCode edition: the OS cage (Windows)
+
+The ZCode edition keeps the same staged contract (assess -> explain -> separate consents
+-> plan-only preview -> apply with self-cleanup -> verify -> exact rollback) but moves
+the enforcement from the Codex engine to the operating system, because ZCode has no
+configuration-file permission surface.
+
+What gets written on the user machine:
+
+| Target | Content |
+|---|---|
+| local user (default `ZCode-Sandbox`) | standard account, random 32-char password, stored DPAPI(CurrentUser)-encrypted under the cage state; only the main user can decrypt |
+| `C:\Program Files\ZCodeSandbox\` | robocopy of the ZCode install + RX ACE for the sandbox user (admin-controlled path, required on hardened machines) |
+| authorized workspace roots | Modify ACEs for the sandbox user, recorded in install-state.json |
+| secret-like files in those roots | deny ACE (`:R`) for the sandbox user, enumerated at install time |
+| `~/.zcode/safe-setup/` | install-state.json, authorized-workspaces.json, bin\ launcher + checkpoint bridge, canary, probe scratch |
+| Start Menu | "ZCode (Sandboxed)" shortcut launching the cage |
+
+Rollback is driven exclusively by install-state.json: ACEs removed, install copy
+deleted, shortcut removed, sandbox account and profile deleted; workspace trees are
+never touched. The cage state itself lives in the main user's profile and is therefore
+unreachable for the sandbox user - the boundary protects its own configuration.
+
+Launcher mechanics worth knowing (verified on the reference machine):
+`Start-Process -Credential` cannot be combined with `-Wait` or `-WindowStyle Hidden`
+(both throw although the launch succeeds), so the launcher and probes synchronize via
+result files. See [zcode-probe/PROBE-REPORT.md](zcode-probe/PROBE-REPORT.md).

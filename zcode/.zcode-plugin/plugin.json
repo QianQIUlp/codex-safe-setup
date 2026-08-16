@@ -1,0 +1,14 @@
+{
+  "name": "zcode-safe-setup",
+  "version": "0.1.0",
+  "description": "Audit, install, verify, and roll back an OS-enforced ZCode boundary: a dedicated low-privilege Windows user, NTFS ACL workspace grants, secret deny ACEs, a Program Files launcher copy, and recoverable Git checkpoints.",
+  "author": {
+    "name": "QianQIUlp and Codex Safe Setup Contributors",
+    "url": "https://github.com/QianQIUlp"
+  },
+  "homepage": "https://github.com/QianQIUlp/codex-safe-setup",
+  "repository": "https://github.com/QianQIUlp/codex-safe-setup",
+  "license": "Apache-2.0",
+  "skills": "skills",
+  "commands": "commands"
+}

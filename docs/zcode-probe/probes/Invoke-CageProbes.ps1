@@ -87,12 +87,15 @@ $r | Set-Content "$env:marked_scratch\probe-result.txt"
 '@ | Set-Content "$scratch\sb.ps1"
 $env:marked_home = $env:USERPROFILE; $env:marked_root = $authRoot; $env:marked_scratch = $scratch; $env:marked_canary = $canary
 # re-mark env for the child via a wrapper (child cannot see our env): use literal replacement instead
-((Get-Content "$scratch\sb.ps1" -Raw)
-  -replace '\$env:marked_canary', "'$canary'"
-  -replace '\$env:marked_home', "'$env:USERPROFILE'"
-  -replace '\$env:marked_root', "'$authRoot'"
-  -replace '\$env:marked_scratch', "'$scratch'"
-  -replace '\$env:TEMP\\wcopy\.exe', "'C:\Users\Public\$ProbeUserName\wcopy.exe'") | Set-Content "$scratch\sb.ps1"
+Copy-Item C:\Windows\System32\where.exe "$scratch\wcopy.exe" -Force
+$template = (Get-Content "$scratch\sb.ps1" -Raw)
+$template = $template `
+  -replace [regex]::Escape('$env:marked_canary'), $canary.Replace("'", "''") `
+  -replace [regex]::Escape('$env:marked_home'), $env:USERPROFILE `
+  -replace [regex]::Escape('$env:marked_root'), $authRoot `
+  -replace [regex]::Escape('$env:marked_scratch'), $scratch `
+  -replace [regex]::Escape('$env:TEMP\wcopy.exe'), "$scratch\wcopy.exe"
+$template | Set-Content "$scratch\sb.ps1"
 Copy-Item C:\Windows\System32\where.exe "$scratch\wcopy.exe" -Force
 Remove-Item "$scratch\probe-result.txt" -ErrorAction SilentlyContinue
 '===== PHASE 1+2 (boundary + execution control) ====='

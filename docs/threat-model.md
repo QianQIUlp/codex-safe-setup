@@ -81,3 +81,23 @@ Configuration parsing, file inspection, and `codex execpolicy check` show that t
 - Capturing secrets in checkpoints.
 - Automatically restoring or overwriting a working tree.
 - Weakening other security controls to make installation easier.
+
+## ZCode edition deltas (OS cage)
+
+Assets and trust boundaries change as follows versus the Codex edition:
+
+- The boundary itself is a standard local Windows user plus NTFS ACLs; the model and
+  the ZCode client are both inside the untrusted zone. The main user remains the
+  trusted root (and can read the sandbox user's data, including its ZCode login).
+- Reads outside the cage (main profile, credentials, SSH keys, cage state) are denied
+  by default profile ACLs - this includes prompt-injection attempts to exfiltrate
+  credentials: the read fails before any network capability matters.
+- Writes are confined to granted workspace roots; recovery is bounded by Git
+  checkpoints rather than trusting the agent to undo mistakes.
+- NOT CONTROLLED (expanded versus Codex): network egress (no per-user firewalling for
+  one executable path), secret files created after install inside granted roots,
+  execution of repo-local binaries varies with machine execution-control policy, and
+  main-user ZCode sessions remain outside the cage entirely.
+- Machine dependency is first-class: the installer refuses user-writable install
+  locations and the assessment reports the execution-control posture instead of
+  assuming it. Probe evidence: [zcode-probe/PROBE-REPORT.md](zcode-probe/PROBE-REPORT.md).

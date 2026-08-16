@@ -98,3 +98,23 @@ pwsh -NoProfile -File ./tools/Build-Release.ps1 -Force
 测试只使用临时 Codex Home 和临时 Git 仓库，不会修改真实 Codex 配置。Bug 和功能建议请提交到 [Issues](https://github.com/QianQIUlp/codex-safe-setup/issues)，提交 PR 前阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。安全漏洞必须通过 [GitHub Security Advisories](https://github.com/QianQIUlp/codex-safe-setup/security/advisories/new) 私下报告，不要公开披露。
 
 本项目采用 [Apache-2.0](LICENSE) 许可证。
+
+## ZCode 版(OS 沙箱,Windows)
+
+同一哲学在 ZCode 上的落地,机制不同:ZCode 没有 Codex `config.toml` 权限档案那样的配置面,因此边界由 **Windows 本身**强制。ZCode 版安装的是一个 *OS 笼子*:
+
+- 专用**标准(非管理员)本地用户**运行 ZCode;
+- 你的 profile、`~/.ssh`、`~/.aws`、ZCode 凭据对 agent 会话**不可读**——由 NTFS 强制,不依赖模型行为;
+- 已注册的工作区根授予显式 Modify ACL,其内既有密钥类文件加拒绝 ACE;
+- ZCode 从 `C:\Program Files\ZCodeSandbox` 的**受管副本**运行(在禁止用户可写路径执行 exe 的加固机器上这是必须的);
+- 安装过程一次 UAC、DPAPI 保护的启动凭据、开始菜单快捷方式 **"ZCode (Sandboxed)"**、精确回滚、可选的分支/索引中立 Git 检查点(`refs/zcode-safe/*`)。
+
+以 ZCode 插件安装:打开 **设置 -> 插件管理 -> 发现 -> +**,把本 GitHub 仓库(或本地检出)添加为 marketplace,然后安装 **ZCode Safe Setup**。在 ZCode 里运行 `/zcode-safe-setup`,或直接说:
+
+```text
+Use secure-zcode-setup to audit my exposure and install the OS cage.
+```
+
+诚实的边界:网络出口**不受控制**(Windows 防火墙无法按用户区分同一可执行路径)、安装后新建的密钥文件不在拒绝 ACE 覆盖内、只有经沙箱快捷方式启动的会话在笼子内。机器实测证据见
+[docs/zcode-probe/PROBE-REPORT.md](docs/zcode-probe/PROBE-REPORT.md),Codex 到 NTFS 的边界映射见
+[zcode/skills/secure-zcode-setup/references/os-boundary-model.md](zcode/skills/secure-zcode-setup/references/os-boundary-model.md)。
