@@ -41,10 +41,35 @@ foreach ($file in $requiredFiles) {
     Assert-True (Test-Path -LiteralPath $file -PathType Leaf) ("Required file is missing: {0}" -f $file)
 }
 
+$strictUtf8 = [Text.UTF8Encoding]::new($false, $true)
+$utf8Files = @($requiredFiles + (Join-Path $repositoryRoot 'CHANGELOG.md'))
+foreach ($file in $utf8Files) {
+    try {
+        $text = [IO.File]::ReadAllText($file, $strictUtf8)
+    }
+    catch {
+        throw ("File is not strict UTF-8: {0}" -f $file)
+    }
+    Assert-True (-not $text.Contains([char]0xFFFD)) ("File contains a Unicode replacement character: {0}" -f $file)
+    Assert-True ($text -notmatch '\?\?\?') ("File contains a likely encoding replacement run: {0}" -f $file)
+}
+
+$utf8Sentinels = @{
+    'README.md' = -join @([char]0x7B80, [char]0x4F53, [char]0x4E2D, [char]0x6587)
+    'README.zh-CN.md' = -join @([char]0x5BA1, [char]0x6279, [char]0x4E0D, [char]0x662F, [char]0x5B89, [char]0x5168, [char]0x8FB9, [char]0x754C)
+    'CHANGELOG.md' = -join @([char]0x81EA, [char]0x5B9A, [char]0x4E49)
+    'skills/codex-safe-setup/SKILL.md' = -join @([char]0x81EA, [char]0x5B9A, [char]0x4E49)
+}
+foreach ($entry in $utf8Sentinels.GetEnumerator()) {
+    $path = Join-Path $repositoryRoot $entry.Key
+    $text = [IO.File]::ReadAllText($path, $strictUtf8)
+    Assert-True ($text.Contains([string]$entry.Value)) ("UTF-8 sentinel is missing: {0}" -f $entry.Key)
+}
+
 $manifestText = [IO.File]::ReadAllText($manifestPath)
 $manifest = $manifestText | ConvertFrom-Json
 Assert-True ($manifest.name -eq 'codex-safe-setup') 'Plugin name must remain codex-safe-setup.'
-Assert-True ($manifest.version -eq '0.1.3') 'Release package must use version 0.1.3.'
+Assert-True ($manifest.version -eq '0.1.4') 'Release package must use version 0.1.4.'
 Assert-True ($manifest.version -match '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$') 'Plugin version must be strict semver.'
 Assert-True (-not [string]::IsNullOrWhiteSpace($manifest.description)) 'Plugin description is required.'
 Assert-True (-not [string]::IsNullOrWhiteSpace($manifest.author.name)) 'Plugin author name is required.'
@@ -118,6 +143,7 @@ foreach ($file in $powerShellFiles) {
     }
 }
 
+Write-Output 'PASS: strict UTF-8 package sources and sentinels'
 Write-Output 'PASS: plugin manifest and release metadata'
 Write-Output 'PASS: Git-backed marketplace metadata'
 Write-Output 'PASS: canonical skill, compatibility alias, and UI metadata'

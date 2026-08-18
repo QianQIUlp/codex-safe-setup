@@ -154,7 +154,7 @@ unified_exec = true
     Assert-True ($directNetworkCheck.Count -eq 1 -and $directNetworkCheck[0].Status -eq 'PASS') 'Verifier must accept direct unrestricted networking only when the proxy and domain table are absent.'
     $directState = Get-Content -LiteralPath (Join-Path $directHome 'safe-setup\install-state.json') -Raw | ConvertFrom-Json
     Assert-True (@($directState.AllowedDomains).Count -eq 0) 'Unrestricted install state must not retain domain allow rules.'
-    Assert-True ($directState.schemaVersion -eq 3 -and $directState.productVersion -eq '0.1.3') 'New installs must record the current state schema and product version.'
+    Assert-True ($directState.schemaVersion -eq 3 -and $directState.productVersion -eq '0.1.4') 'New installs must record the current state schema and product version.'
 
     $upgradeHome = Join-Path $temporaryRoot 'upgrade-home'
     $upgradeStateRoot = Join-Path $upgradeHome 'safe-setup'
@@ -191,7 +191,7 @@ unified_exec = true
     Assert-True ($upgradedConfig -match '(?m)^network_proxy = false\r?$') 'Upgrade must disable the old wildcard filtering proxy for direct unrestricted networking.'
     Assert-True ($upgradedConfig -notmatch '(?m)^\s*"\*"\s*=\s*"allow"') 'Upgrade must remove the old wildcard domain rule.'
     $upgradedState = Get-Content -LiteralPath $legacyStatePath -Raw | ConvertFrom-Json
-    Assert-True ($upgradedState.schemaVersion -eq 3 -and $upgradedState.productVersion -eq '0.1.3' -and $upgradedState.operation -eq 'Upgrade') 'Upgrade must write schema-versioned state.'
+    Assert-True ($upgradedState.schemaVersion -eq 3 -and $upgradedState.productVersion -eq '0.1.4' -and $upgradedState.operation -eq 'Upgrade') 'Upgrade must write schema-versioned state.'
     Assert-True ($upgradedState.previousStateSnapshot -and (Test-Path -LiteralPath $upgradedState.previousStateSnapshot -PathType Leaf)) 'Upgrade must retain an immutable previous-state snapshot.'
     Assert-True ([IO.Path]::GetFullPath($upgradedState.ConfigBackup).StartsWith([IO.Path]::GetFullPath((Join-Path $upgradeStateRoot 'backups')), [StringComparison]::OrdinalIgnoreCase)) 'Upgrade backup must stay under the transaction backup root.'
 

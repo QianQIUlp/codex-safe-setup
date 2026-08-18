@@ -2,7 +2,15 @@
 
 All notable changes are documented here. Releases follow semantic versioning.
 
+## 0.1.4 - 2026-08-18
+
+- Rebuild release artifacts from byte-preserved UTF-8 source after withdrawing the encoding-damaged v0.1.3 package.
+- Fix automatic publication by explicitly dispatching the Release workflow after an aligned version tag is validated or created.
+- Add package validation for strict UTF-8 decoding and required Chinese text sentinels so encoding regressions fail CI.
+
 ## 0.1.3 - 2026-08-18
+
+> Withdrawn: GitHub release artifacts for this version were encoding-damaged. Use 0.1.4 or later.
 
 - Fix linked-worktree Git workflows without granting raw write access to the parent repository's shared `.git`.
 - Add bridge `Status` so real Git state can be compared with sandbox/ACL visibility artifacts instead of treating inaccessible tracked files as deletions.
@@ -26,7 +34,7 @@ All notable changes are documented here. Releases follow semantic versioning.
 
 - Explain the concrete consequences of unrestricted command networking before acknowledgement: destination-unbounded exfiltration, prompt injection, unsafe downloads, and license risk.
 - Clarify that command networking does not itself widen filesystem or deletion authority, while existing workspace write/delete capability remains.
-- Require the completion handoff to select `Custom` / `???`, confirm `codex-safe-workspace`, and start a new task or session.
+- Require the completion handoff to select `Custom` / `自定义`, confirm `codex-safe-workspace`, and start a new task or session.
 - Move new marketplace installs to a `main`-tracked catalog so subsequent released versions can be discovered, with a one-time migration path for `v0.1.0` users.
 - Add regression coverage for the risk disclosure, acknowledgement guard, and activation handoff.
 - Diagnose repeated Windows elevated-sandbox administrator prompts by reporting proxy-port setup conflicts while treating recovered, aligned history as informational.
