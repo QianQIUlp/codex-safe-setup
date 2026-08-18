@@ -2,6 +2,14 @@
 
 All notable changes are documented here. Releases follow semantic versioning.
 
+## 0.1.5 - 2026-08-18
+
+- Keep codex-safe-workspace as the normal default while preserving explicit task-level UI overrides; Full Access is accepted only when the effective runtime is :danger-full-access.
+- Stop treating codexsandboxonline or codexsandboxoffline as permission evidence; those names describe Windows sandbox/network variants.
+- Remove the alternate Status/Commit Git backend and restore native Git as the only normal status/add/commit/branch path.
+- Migrate install state to schema 4 and rewrite old workspace registries to the recovery-only Save/List format without changing the user's network, approval, Windows sandbox, backup, or rollback choices.
+- Add package and behavioral assertions for UI/runtime profile provenance and for the absence of normal-commit bridge actions.
+
 ## 0.1.4 - 2026-08-18
 
 - Rebuild release artifacts from byte-preserved UTF-8 source after withdrawing the encoding-damaged v0.1.3 package.

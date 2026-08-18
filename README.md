@@ -50,7 +50,7 @@ The upgrade first shows the prior and requested approval, network, Windows sandb
 
 Version 0.1.2 requires this configuration migration for 0.1.1 `Unrestricted` users because the old wildcard proxy representation did not provide native direct networking. The migration disables the filtering proxy and removes the wildcard domain table. The same unrestricted-network risk acknowledgement and Windows administrator-setup acknowledgement remain required when those preserved choices apply.
 
-Version 0.1.3 adds linked-worktree-safe status and opt-in normal commits without making the parent repository's shared `.git` writable. After refreshing the plugin, preview the configuration upgrade. Commit support remains disabled unless you explicitly register the worktree with `-EnableGitCommitBridge $true`; it stages only named paths on allowed branch prefixes (default `codex/`) and leaves unselected changes alone.
+Version 0.1.5 restores the simple permission model: codex-safe-workspace remains the normal default, while an explicit Full Access choice in the Codex UI must activate :danger-full-access for that task. The release removes the alternate Status/Commit Git bridge; native Git is used in verified Full Access tasks. Existing Save/List recovery checkpoints remain available.
 
 If you manually copied the old standalone `~/.codex/skills/secure-codex-setup` folder instead of installing the marketplace plugin, move that folder to a recoverable backup outside skill discovery, add the GitHub marketplace, install `codex-safe-setup`, and start a new task. Keeping the standalone copy discoverable would expose two independently versioned skills.
 
@@ -88,7 +88,7 @@ On Windows, the setup separately asks whether to install PowerShell 7 and Codex 
 - Denies common credential-bearing files such as `.env`, private keys, npm credentials, and cloud credential files inside the workspace.
 - Explicitly selects offline, proxy-enforced allowlist, or direct unrestricted command networking.
 - Preserves Codex protections for `.git`, `.codex`, and `.agents`.
-- Optionally installs a narrow, pinned Git bridge that can inspect true status and save branch/index-neutral checkpoints; separately authorized linked worktrees can commit explicit paths on allowed Codex branches without broad `.git` write access.
+- Optionally installs a narrow, pinned Save/List recovery bridge that never acts as an alternate status or commit backend.
 - Backs up every managed file and provides an exact rollback command.
 
 The installer refuses to mix modern permission profiles silently with legacy sandbox settings. Migration requires explicit consent and a backup is taken first. Existing installations must use the dedicated upgrade path so active state is never silently overwritten.
@@ -108,7 +108,7 @@ The skill reports each control as:
 - `FAIL`: a required condition is missing or contradictory.
 - `NOT CONTROLLED`: the capability belongs to another control surface.
 
-Static configuration and `codex execpolicy check` are evidence, not proof of every future runtime behavior. After installation, open the Codex permission selector, choose **Custom**, and confirm that `codex-safe-workspace` is selected. On Windows, restart Codex and start a new task before runtime probes; do not resume a pre-install task. If administrator prompts repeat, fully quit every Codex desktop window and CLI process before one clean relaunch. On other platforms, start a new task or CLI session. Do not switch back to Full Access.
+Static configuration and codex execpolicy checks are evidence, not proof of the active task. After installation, Custom with codex-safe-workspace is the normal default. If you explicitly select Full Access in the UI, the task must report activePermissionProfile.id as :danger-full-access (or authoritative danger-full-access runtime metadata). The codexsandboxonline/offline username is not permission evidence. In a verified Full Access task, use native Git normally. On Windows, restart Codex and start a new task after a machine-configuration change; repeated administrator prompts require fully quitting every Codex desktop window and CLI process before one clean relaunch.
 
 Runtime verification is mode-specific: `Off` must block a known-reachable endpoint; `Allowlist` must allow one configured domain through the proxy and block one unlisted domain; `Unrestricted` must pass a direct TCP or native OpenSSH probe. A successful SOCKS/HTTP proxy probe is not proof of direct unrestricted networking.
 
@@ -116,7 +116,7 @@ The preferred Windows `Elevated` sandbox uses administrator-approved OS setup; i
 
 Schema-versioned install state keeps transaction-scoped backups and immutable previous-state snapshots. A rollback after an upgrade restores both the prior managed files and the prior active state, allowing the rollback chain to continue one generation at a time.
 
-The optional bridge snapshots tracked and ordinary untracked files to hidden refs under `refs/codex-safe/checkpoints/*`. Its `Status` action distinguishes real repository state from sandbox/ACL visibility artifacts. Opt-in `Commit` requires explicit paths, an allowed branch prefix, a clean starting index, and no in-progress Git operation; it suppresses hooks/signing and leaves unselected changes untouched. The bridge refuses sensitive-looking untracked files and never performs automatic `reset --hard`, `clean`, branch replacement, or in-place checkout. See [How it works](docs/how-it-works.md).
+The optional recovery bridge snapshots tracked and ordinary untracked files to hidden refs under refs/codex-safe/checkpoints/*. It exposes only Save and List, refuses sensitive-looking untracked files, and never performs automatic reset, clean, branch replacement, or in-place checkout. Normal Git status, add, commit, and branch operations are not proxied by this project. See How it works for details.
 
 ## Develop and test
 
@@ -128,7 +128,7 @@ pwsh -NoProfile -File ./tests/Run-Tests.ps1
 pwsh -NoProfile -File ./tools/Build-Release.ps1 -Force
 ```
 
-Tests use temporary Codex homes and Git repositories. They do not change the real Codex configuration. The suite covers configuration migration and preservation, injection guards, least-privilege generation, `execpolicy` validation, branch/index-neutral checkpoints, sensitive-file refusals, pinned Git, authorized repositories, versioned install-state upgrades, target-locked rollback chains, and exact restoration.
+Tests use temporary Codex homes and Git repositories. They do not change the real Codex configuration. The suite covers configuration migration and preservation, UI/runtime permission-contract assertions, injection guards, least-privilege generation, execpolicy validation, branch/index-neutral recovery checkpoints, sensitive-file refusals, pinned Git, authorized repositories, versioned install-state upgrades, target-locked rollback chains, and exact restoration.
 
 ## Community
 

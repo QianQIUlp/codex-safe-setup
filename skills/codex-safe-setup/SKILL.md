@@ -37,7 +37,7 @@ If `CODEX_HOME/safe-setup/install-state.json` exists, do not rerun the first-ins
 
 For a 0.1.1-or-earlier `Unrestricted` installation, explain that the old wildcard proxy representation did not provide native direct networking. The 0.1.2 migration disables the filtering proxy, removes the wildcard domain table, records state schema 2, and requires a full Codex restart plus a fresh task. Never claim the plugin update alone activated this migration.
 
-For 0.1.2 installations, version 0.1.3 records state schema 3 and upgrades the registered-workspace bridge without making shared Git metadata writable. Preserve the prior Git commit-bridge choice. Enabling normal branch commits is a separate capability choice: preview it first and require the user to explicitly select it for an exact registered worktree.
+For 0.1.4-or-earlier installations, version 0.1.5 records state schema 4 and removes the alternate normal-Git Status / Commit bridge. Upgrade rewrites any schema-2 workspace registry to the recovery-only Save/List schema and does not preserve commit authorizations. The user's safe default profile, networking choice, backups, rollback chain, and optional recovery checkpoints remain intact.
 
 ### 2. Explain the choices before asking
 
@@ -82,9 +82,11 @@ Run `Install-CodexSafety.ps1` with `-PlanOnly`. Include `-MigrateLegacySettings`
 
 Show the configuration path, managed keys, chosen boundaries, checkpoint registration, backup location, rollback command, and controls that remain outside this skill.
 
-For a linked Git worktree, keep the parent repository's shared `.git` protected. If the user needs normal commits, offer `-EnableGitCommitBridge $true` only after explaining that the bridge will update the real index and current branch for explicit paths. The default branch prefix is `codex/`; use `-CommitBranchPrefix` only when the user explicitly chooses another prefix. Do not replace this with a broad filesystem write exception for the parent `.git`.
+Write the named profile as default_permissions only. This is the fallback when a task has no explicit permission selection; it must not be presented as a lock on the Codex UI. Do not create or modify managed allowed_permission_profiles restrictions, and do not reintroduce legacy sandbox_mode keys.
 
-Use bridge `Status` when direct `git status` reports surprising tracked deletions. A difference means the sandbox profile or host ACL is hiding files from the direct Git process; it is not evidence that the project deleted them. Credential-style tracked fixtures such as public test certificates still require exact, reviewed read exceptions; never disable the workspace secret globs wholesale.
+For a linked Git worktree, keep the parent repository's shared .git protected in the safe default. If the user temporarily selects Full Access for a task, use native Git normally in that task; Full Access must remove the sandbox restriction rather than route Git through a separate backend. Never add a parent-.git write exception or a commit bridge to compensate for a UI/runtime mismatch.
+
+If direct Git reports surprising tracked deletions in the safe default, treat sandbox visibility or host ACL as hypotheses and verify them read-only. The codexsandboxonline and codexsandboxoffline account names identify Windows sandbox/network variants; neither name proves Full Access, filesystem scope, or effective task permissions.
 
 ### 5. Apply or upgrade only after confirmation
 
@@ -116,13 +118,17 @@ After approval, rerun with `-ConfirmApply -NonInteractive`. For `Unrestricted`, 
   -NonInteractive
 ```
 
-Never select or preserve `danger-full-access` as a verified safe profile.
+Never install :danger-full-access as the configured default. It remains a valid explicit, temporary task-level override when the user deliberately selects Full Access in the Codex UI.
 
 ### 6. Verify, activate, and report honestly
 
 Run `Test-CodexSafety.ps1`. Treat static configuration and `execpolicy` checks as evidence, not runtime proof. Mark unavailable CLI rule checks as `PARTIAL`, not `PASS`.
 
-After a successful apply, end with a visible activation block. Tell the user to open the Codex permission selector, choose `Custom` / `自定义`, and confirm that `codex-safe-workspace` is the selected profile; explicitly say not to choose Full Access. On Windows, tell the user to restart Codex and start a new task rather than resume a pre-install task because existing execution environments retain their old proxy and sandbox state. If administrator prompts repeat, then require the user to fully quit every Codex desktop window and CLI process before one clean relaunch; alternating old and new loopback proxy port sets can invalidate the global elevated-firewall setup. On other platforms, start a new Codex task or CLI session because an existing execution environment does not retroactively adopt the new profile. Never imply that writing the file changed the current task's permissions.
+After a successful apply, end with a visible activation block. Explain that Custom / 自定义 with codex-safe-workspace is the normal default. Also explain that an explicit UI selection of Full Access for a task must override that fallback and activate the built-in :danger-full-access profile for that task and subsequent turns.
+
+Verify the effective runtime, not only the visible selector. Prefer the task response's activePermissionProfile.id; accept authoritative task metadata that explicitly says danger-full-access when the profile id is unavailable. The codexsandboxonline / codexsandboxoffline username is not proof of permission scope. If the UI says Full Access but runtime metadata still reports the custom/workspace profile, report FAIL: UI/runtime permission mismatch; do not claim Full Access and do not invent a Git backend. In a verified Full Access task, native Git must be able to update the repository's ordinary metadata, including a linked worktree's shared .git, subject only to normal OS ACLs.
+
+On Windows, restart Codex and start a new task after installing or upgrading the machine configuration because an existing execution environment does not reload the new default, proxy, or sandbox setup from disk. A later UI permission change within a supported task is different: the Codex protocol defines it for subsequent turns and its returned runtime profile is the acceptance result. If administrator prompts repeat, require the user to fully quit every Codex desktop window and CLI process before one clean relaunch; alternating old and new loopback proxy port sets can invalidate the global elevated-firewall setup. On other platforms, start a new task or CLI session after configuration changes. Never imply that writing the file changed the current task's permissions.
 
 When Windows `Elevated` is selected, explain that an administrator-approved sandbox setup prompt can appear after relaunch, but it is not expected for each command. Repeated administrator prompts are a failure signal. Run the read-only assessment and inspect only its `WindowsSandboxSetupHealth` result: `Allowlist` expects proxy ports 3128 and 8081, while `Off` and direct `Unrestricted` expect no proxy ports. Aligned latest ports mean historical changes are informational; `CONFLICT` means stale Codex processes should be closed before one clean relaunch. Preserve `Elevated` unless its setup genuinely fails and the user explicitly chooses the weaker fallback.
 
@@ -136,4 +142,4 @@ Run `Rollback-CodexSafety.ps1` without confirmation first so it shows the target
 
 Allow only the installed `New-CodexCheckpoint.ps1` bridge through the exact PowerShell 7 executable and exact script path. Never allow a general `pwsh`, `powershell`, `git`, shell-wrapper, or arbitrary-script prefix.
 
-The bridge must accept only registered repositories and a pinned Git executable. `Save` creates a hidden checkpoint without changing the branch or real index; `Status` reports the repository state outside protected metadata. `Commit` is opt-in, accepts explicit literal paths only, requires an allowed branch prefix and an initially clean index, refuses in-progress Git operations and repository-local clean/process filters, suppresses hooks and signing, and leaves unselected changes untouched. Never use it as a general Git or shell escape.
+The recovery bridge must accept only registered repositories and a pinned Git executable. Save creates a hidden checkpoint without changing the branch or real index, and List enumerates those checkpoints. It must not expose Status, Commit, general Git, or a shell escape. Normal status, add, commit, and branch operations remain native Git operations and require a task whose effective permissions actually permit them.

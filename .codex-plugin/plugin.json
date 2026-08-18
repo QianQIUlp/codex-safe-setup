@@ -1,6 +1,6 @@
 {
   "name": "codex-safe-setup",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Audit and install a least-privilege, recoverable local Codex configuration.",
   "author": {
     "name": "QianQIUlp and Codex Safe Setup Contributors",
@@ -10,11 +10,11 @@
   "repository": "https://github.com/QianQIUlp/codex-safe-setup",
   "license": "Apache-2.0",
   "skills": "./skills/",
-  "keywords": ["codex", "sandbox", "permissions", "privacy", "checkpoint", "worktree"],
+  "keywords": ["codex", "sandbox", "permissions", "privacy", "checkpoint"],
   "interface": {
     "displayName": "Codex Safe Setup",
     "shortDescription": "Install verified, bounded Codex autonomy.",
-    "longDescription": "Audits filesystem, credential-read, network, approval, and recovery boundaries; then installs a consent-driven least-privilege profile with rollback, Git checkpoints, and opt-in linked-worktree commits.",
+    "longDescription": "Installs a least-privilege default while preserving explicit task-level Full Access overrides, rollback, and optional recovery checkpoints.",
     "developerName": "QianQIUlp and contributors",
     "category": "Developer Tools",
     "capabilities": ["Interactive", "Write"],

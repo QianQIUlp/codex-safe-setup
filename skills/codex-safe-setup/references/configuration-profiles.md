@@ -10,6 +10,12 @@
 
 Auto-review is a reviewer substitution. It does not alter filesystem, network, protected-path, or workspace limits.
 
+## Default and task-level selection
+
+default_permissions selects the fallback profile for tasks that do not make an explicit selection. It is not a managed restriction on the Codex UI. An explicit Full Access selection must activate the built-in :danger-full-access profile for that task; verify activePermissionProfile.id or authoritative danger-full-access task metadata.
+
+Do not infer permission scope from the Windows sandbox username. codexsandboxonline and codexsandboxoffline distinguish sandbox/network variants, not Full Access versus workspace access. If the UI and runtime metadata disagree, report an activation failure instead of widening workspace roots or adding a Git backend.
+
 ## Command-network modes
 
 | Installer value | Permission network | Filtering proxy | Behavior | Requirement |

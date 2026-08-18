@@ -69,7 +69,7 @@ foreach ($entry in $utf8Sentinels.GetEnumerator()) {
 $manifestText = [IO.File]::ReadAllText($manifestPath)
 $manifest = $manifestText | ConvertFrom-Json
 Assert-True ($manifest.name -eq 'codex-safe-setup') 'Plugin name must remain codex-safe-setup.'
-Assert-True ($manifest.version -eq '0.1.4') 'Release package must use version 0.1.4.'
+Assert-True ($manifest.version -eq '0.1.5') 'Release package must use version 0.1.5.'
 Assert-True ($manifest.version -match '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$') 'Plugin version must be strict semver.'
 Assert-True (-not [string]::IsNullOrWhiteSpace($manifest.description)) 'Plugin description is required.'
 Assert-True (-not [string]::IsNullOrWhiteSpace($manifest.author.name)) 'Plugin author name is required.'
@@ -105,14 +105,14 @@ Assert-True ($skillText -match 'prompt injection') 'Skill must disclose prompt-i
 Assert-True ($skillText -match 'malware or vulnerable dependencies') 'Skill must disclose download and dependency risk before unrestricted networking.'
 Assert-True ($skillText -match 'Allowlist.*filtering proxy') 'Skill must preserve proxy-enforced domain filtering for Allowlist mode.'
 Assert-True ($skillText -match 'Unrestricted.*disables the proxy.*SSH') 'Skill must define Unrestricted as direct networking for native protocols.'
-Assert-True ($skillText -match 'choose `Custom`') 'Skill must require the Custom permission selection after installation.'
-Assert-True ($skillText -match '`codex-safe-workspace` is the selected profile') 'Skill must name the profile the user should activate.'
-Assert-True ($skillText -match 'fully quit every Codex desktop window and CLI process') 'Skill must require a complete Windows process shutdown after installation.'
+Assert-True ($skillText -match 'default_permissions.*fallback') 'Skill must treat the managed profile as a default, not an override lock.'
+Assert-True ($skillText -match 'Full Access.*:danger-full-access') 'Skill must require explicit UI Full Access to produce the built-in full-access profile.'
+Assert-True ($skillText -match 'activePermissionProfile') 'Skill must verify task-level permission provenance rather than UI appearance.'
+Assert-True ($skillText -match 'codexsandboxonline.*codexsandboxoffline') 'Skill must reject sandbox account names as permission evidence.'
+Assert-True ($skillText -match 'native Git') 'Skill must preserve ordinary Git in a true Full Access task.'
+Assert-True ($skillText -notmatch 'EnableGitCommitBridge') 'Skill must not offer an alternate normal-commit backend.'
+Assert-True ($skillText -match 'fully quit every Codex desktop window and CLI process') 'Skill must retain the Windows restart diagnostic for configuration activation.'
 Assert-True ($skillText -match 'Repeated administrator prompts are a failure signal') 'Skill must treat repeated elevation prompts as a diagnosable failure.'
-Assert-True ($skillText -match 'EnableGitCommitBridge') 'Skill must explain the explicit linked-worktree commit capability.'
-Assert-True ($skillText -match 'bridge `Status`') 'Skill must route surprising Git deletions through the status bridge.'
-Assert-True ($skillText -match '`Commit` is opt-in') 'Skill must keep real branch commits opt-in.'
-Assert-True ($skillText -match 'Do not replace this with a broad filesystem write exception') 'Skill must preserve shared Git metadata protection.'
 
 $openAiYaml = [IO.File]::ReadAllText($openAiYamlPath)
 Assert-True ($openAiYaml -match '(?m)^\s*display_name:\s*"[^"]+"\s*$') 'openai.yaml display_name is required and must be quoted.'
@@ -147,6 +147,6 @@ Write-Output 'PASS: strict UTF-8 package sources and sentinels'
 Write-Output 'PASS: plugin manifest and release metadata'
 Write-Output 'PASS: Git-backed marketplace metadata'
 Write-Output 'PASS: canonical skill, compatibility alias, and UI metadata'
-Write-Output 'PASS: unrestricted-network disclosure and Windows Custom activation handoff'
+Write-Output 'PASS: unrestricted-network disclosure and task-level Full Access override contract'
 Write-Output 'PASS: required community and security documentation'
 Write-Output ("PASS: PowerShell syntax ({0} files)" -f $powerShellFiles.Count)

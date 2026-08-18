@@ -29,6 +29,8 @@ All three approval modes use the same least-privilege filesystem profile:
 
 Command networking is configured separately as offline with no proxy, proxy-enforced allowlist, or explicitly acknowledged direct unrestricted access with no proxy. The last mode is what enables proxy-unaware native protocols such as OpenSSH.
 
+default_permissions selects only the fallback profile. An explicit task-level UI selection must take precedence; Full Access is accepted only when the returned activePermissionProfile is :danger-full-access (or equivalent authoritative task metadata).
+
 ### 3. Preview and apply
 
 `Install-CodexSafety.ps1 -PlanOnly` shows the exact managed targets and decisions without changing them. Applying requires `-ConfirmApply -NonInteractive`. High-risk or administrator-backed choices require additional acknowledgements. Legacy sandbox migration is rejected unless `-MigrateLegacySettings` is present.
@@ -43,13 +45,13 @@ The Windows sandbox stores firewall setup for the active network route. `Allowli
 
 `Upgrade-CodexSafety.ps1` reads the active install state and preserves its recorded selections by default. Running it without `-ConfirmUpgrade` is plan-only. A confirmed upgrade creates a unique transaction directory under `safe-setup/backups`, snapshots the previous active state under `safe-setup/state-history`, and then invokes the same deterministic installer in explicit upgrade mode.
 
-The plugin bundle, applied machine configuration, install-state history, and already-running task are separate layers. Refreshing or reinstalling the plugin changes only the first layer. The configuration upgrade changes the second and third layers after review. A full restart and fresh task activate the fourth.
+Version 0.1.5 also removes the alternate Status/Commit Git backend and rewrites old workspace registries to the Save/List-only recovery schema. The plugin bundle, applied machine configuration, install-state history, and already-running task are separate layers. Refreshing or reinstalling the plugin changes only the first layer. The configuration upgrade changes the second and third layers after review. A full restart and fresh task activate the fourth.
 
 ### 5. Verify
 
 `Test-CodexSafety.ps1` checks the generated configuration and, when a compatible CLI is available, calls `codex execpolicy check` against both allowed and deliberately broad command prefixes. Missing CLI verification produces `PARTIAL`, never a false `PASS`.
 
-Runtime checks are route-specific and require a new task: `Off` proves a reachable endpoint is blocked; `Allowlist` proves an allowed domain succeeds through the proxy while an unlisted domain fails; `Unrestricted` proves native direct TCP or OpenSSH works without treating a proxy-only banner as sufficient.
+Runtime checks are route-specific and require a new task after machine-configuration changes: Off proves a reachable endpoint is blocked; Allowlist proves an allowed domain succeeds through the proxy while an unlisted domain fails; Unrestricted proves native direct TCP or OpenSSH works without treating a proxy-only banner as sufficient. Task permission checks are separate: Full Access must report activePermissionProfile.id = :danger-full-access, and the codexsandboxonline/offline account name is not evidence.
 
 ### 6. Roll back
 
@@ -59,12 +61,11 @@ Runtime checks are route-specific and require a new task: `Off` proves a reachab
 
 The workspace sandbox intentionally protects `.git`. The optional bridge is copied to `CODEX_HOME/safe-setup/bin` and is the only PowerShell script allowed by the generated command rule. The rule matches the exact PowerShell 7 executable and exact bridge path; it does not allow a general `pwsh`, `powershell`, `git`, shell wrapper, or arbitrary script.
 
-Every action resolves a canonical worktree root, checks `authorized-workspaces.json`, and verifies the pinned Git executable hash. This works for linked worktrees without granting the sandbox raw access to their parent repository's shared `.git`.
+Every action resolves a canonical worktree root, checks authorized-workspaces.json, and verifies the pinned Git executable hash.
 
-- `Save` refuses sensitive-looking untracked paths, builds a temporary index, and stores a hidden checkpoint under `refs/codex-safe/checkpoints/*`. The current branch, real index, and working tree remain unchanged.
-- `List` enumerates checkpoint refs.
-- `Status` reports actual Git state outside the protected metadata boundary, which exposes discrepancies caused by sandbox or host ACL visibility.
-- `Commit` is opt-in per registered worktree. It accepts explicit literal paths only, requires a configured branch prefix (default `codex/`), a clean starting index, and no in-progress Git operation. It suppresses repository hooks and commit signing, refuses local clean/process filters, confirms the exact staged path set, commits it, and leaves every unselected change untouched.
+- Save refuses sensitive-looking untracked paths, builds a temporary index, and stores a hidden checkpoint under refs/codex-safe/checkpoints/*. The current branch, real index, and working tree remain unchanged.
+- List enumerates checkpoint refs.
+- Status and Commit are intentionally unavailable. Normal Git operations remain native Git and require a task whose effective permissions allow repository-metadata writes.
 
 The bridge is not a general Git escape. Recovery from `Save` remains user-controlled and should normally use a separate worktree:
 

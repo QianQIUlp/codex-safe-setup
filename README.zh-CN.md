@@ -46,7 +46,7 @@ codex plugin add codex-safe-setup@codex-safe-setup
 
 0.1.1 的 `Unrestricted` 用户必须执行 0.1.2 配置迁移：旧版通配符代理并不能让原生 SSH 等直连协议联网。迁移会关闭过滤代理并删除通配符域名表。若保留的是无限制联网和 Windows `Elevated`，仍需重新确认相应风险与一次管理员设置提示。
 
-0.1.3 新增适配 linked worktree 的真实状态检查与可选正常提交，同时不把父仓库共享 `.git` 直接开放为可写。刷新插件后先预览配置升级；只有显式以 `-EnableGitCommitBridge $true` 注册具体 worktree 才会启用提交。它只提交明确列出的路径，并限制在允许的分支前缀（默认 `codex/`），未选择的修改保持不动。
+0.1.5 恢复简单权限模型：codex-safe-workspace 只是日常默认；当用户在 Codex UI 中临时选择 Full Access 时，该任务必须真正激活 :danger-full-access。本版移除 Status/Commit Git 桥接；经验证的 Full Access 任务直接使用原生 Git。Save/List 恢复检查点仍可选使用。
 
 如果你以前是手动复制 `~/.codex/skills/secure-codex-setup`，而不是通过 marketplace 安装插件，请先把旧目录可恢复地移出技能发现路径，再添加 GitHub marketplace、安装 `codex-safe-setup` 并新建任务。不要让独立旧副本和插件副本同时被发现。
 
@@ -84,7 +84,7 @@ Windows 上还会分别询问是否安装 PowerShell 7、Codex CLI，以及是�
 - 默认拒绝工作区中的 `.env`、私钥、npm 凭据、云凭据等常见敏感文件。
 - 明确选择离线、由代理强制执行的域名白名单，或关闭代理的直连无限制联网。
 - 保留 Codex 对 `.git`、`.codex`、`.agents` 的保护。
-- 可选安装范围严格、固定 Git 路径与哈希的桥接器：可读取真实状态、保存不改分支/索引的检查点；另行授权的 linked worktree 可在不直接开放共享 `.git` 的情况下提交明确路径。
+- 可选安装只提供 Save/List 的窄恢复检查点桥接，不替代原生 Git 的 status 或 commit。
 - 备份每个受管理文件，并生成精确回滚命令。
 
 安装器不会默默混用新版 permission profiles 与旧版 sandbox 设置。迁移旧设置必须明确同意，而且会先完整备份。
@@ -104,7 +104,7 @@ Web Search、Browser、Computer Use、App、Connector、其他 Plugin、MCP、�
 - `FAIL`：必要条件缺失或互相冲突。
 - `NOT CONTROLLED`：属于其他控制面。
 
-配置检查和 `codex execpolicy check` 是证据，不是对所有未来行为的绝对证明。安装完成后，必须在 Codex 的权限选择器中选择 **自定义（Custom）**，确认当前配置为 `codex-safe-workspace`，不要切回 Full Access。Windows 上先重启 Codex 并新建任务，不要继续使用安装前的旧任务；只有管理员提示反复出现时，才需要完整退出所有 Codex 桌面窗口和 CLI 进程后重新启动。其他平台新建任务或 CLI 会话后再做运行时验证。
+配置检查和 codex execpolicy check 只是证据，不能证明当前任务的实际权限。安装后，Custom / 自定义中的 codex-safe-workspace 是日常默认。如果你在 UI 中明确选择 Full Access，该任务必须回报 activePermissionProfile.id = :danger-full-access（或等价的权威运行时元数据）。codexsandboxonline/offline 账户名不是权限证据。真正的 Full Access 任务直接使用原生 Git。Windows 上更改机器配置后需重启 Codex 并新建任务；只有管理员提示反复出现时，才需完整退出所有 Codex 桌面窗口和 CLI 进程后再重启。
 
 运行时验证必须匹配模式：`Off` 要证明可达目标被阻断；`Allowlist` 要证明白名单目标经代理成功、未列出目标失败；`Unrestricted` 要用直连 TCP 或原生 OpenSSH 成功，代理横幅不能作为直连证据。
 
@@ -112,7 +112,7 @@ Windows 上推荐的 `Elevated` 沙箱需要管理员确认操作系统级初始
 
 带版本的安装状态会保留按事务隔离的备份和不可变的前一状态快照。升级后的回滚会同时恢复上一代受管理文件和上一代活动状态，因此可以按世代继续回滚。
 
-可选桥接器会把已跟踪文件和普通未跟踪文件保存到 `refs/codex-safe/checkpoints/*` 隐藏引用中；`Status` 可区分真实仓库状态与沙箱/ACL 可见性假象。显式启用的 `Commit` 只接受具体路径、允许的分支前缀、干净的初始索引且拒绝进行中的 Git 操作，并关闭 hook 与签名、保留未选择的修改。它拒绝敏感未跟踪文件，也不会自动运行 `reset --hard`、`clean`、替换分支或原地恢复。详见[实现原理](docs/how-it-works.md)。
+可选恢复桥接只会把已跟踪文件和普通未跟踪文件保存到 refs/codex-safe/checkpoints/* 隐藏引用，且只提供 Save 和 List。它拒绝敏感未跟踪文件，也不会自动运行 reset --hard、clean、替换分支或原地恢复。Git status/add/commit/branch 不由本项目代理。详见实现原理。
 
 ## 开发与贡献
 

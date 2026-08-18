@@ -7,8 +7,6 @@ param(
     [Nullable[bool]]$ProtectWorkspaceSecrets,
     [Nullable[bool]]$AllowTempWrite,
     [string]$WorkspacePath,
-    [Nullable[bool]]$EnableGitCommitBridge,
-    [string[]]$CommitBranchPrefix,
     [string]$CodexHome,
     [string]$ConfigPath,
     [string]$StateRoot,
@@ -50,8 +48,6 @@ $effectiveNetwork = if ($PSBoundParameters.ContainsKey('NetworkMode')) { $Networ
 $effectiveWindows = if ($PSBoundParameters.ContainsKey('WindowsSandbox')) { $WindowsSandbox } else { [string](Get-UpgradeStateValue -Name 'WindowsSandbox' -Default 'Keep') }
 $effectiveProtect = if ($PSBoundParameters.ContainsKey('ProtectWorkspaceSecrets')) { [bool]$ProtectWorkspaceSecrets } else { [bool](Get-UpgradeStateValue -Name 'ProtectWorkspaceSecrets' -Default $true) }
 $effectiveTemp = if ($PSBoundParameters.ContainsKey('AllowTempWrite')) { [bool]$AllowTempWrite } else { [bool](Get-UpgradeStateValue -Name 'AllowTempWrite' -Default $false) }
-$effectiveGitCommit = if ($PSBoundParameters.ContainsKey('EnableGitCommitBridge')) { [bool]$EnableGitCommitBridge } else { [bool](Get-UpgradeStateValue -Name 'EnableGitCommitBridge' -Default $false) }
-$effectiveBranchPrefixes = if ($PSBoundParameters.ContainsKey('CommitBranchPrefix')) { @($CommitBranchPrefix) } elseif ($state.PSObject.Properties['CommitBranchPrefixes']) { @($state.CommitBranchPrefixes) } else { @('codex/') }
 
 $configText = Read-CssText -Path $resolvedConfig
 if ($PSBoundParameters.ContainsKey('AllowedDomain')) {
@@ -83,15 +79,13 @@ $installArguments = @{
     CodexHome = $resolvedHome
     ConfigPath = $resolvedConfig
     StateRoot = $resolvedState
-    EnableGitCommitBridge = $effectiveGitCommit
-    CommitBranchPrefix = $effectiveBranchPrefixes
     Upgrade = $true
 }
 if ($effectiveWorkspace -and (Test-Path -LiteralPath $effectiveWorkspace -PathType Container)) {
     $installArguments.WorkspacePath = $effectiveWorkspace
 }
 elseif ($effectiveWorkspace) {
-    Write-Warning "The recorded workspace no longer exists: $effectiveWorkspace. Its registry is preserved but not rewritten."
+    throw "The recorded workspace no longer exists: $effectiveWorkspace. Pass an existing -WorkspacePath so the recovery registry can be rewritten; refusing to leave an older bridge rule active."
 }
 if ($MigrateLegacySettings) { $installArguments.MigrateLegacySettings = $true }
 if ($AcknowledgeRisk) { $installArguments.AcknowledgeRisk = $true }

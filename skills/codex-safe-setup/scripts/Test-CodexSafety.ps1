@@ -93,23 +93,6 @@ if ($state) {
         $bridgeOkay = Test-Path -LiteralPath $state.BridgePath -PathType Leaf
         $rulesOkay = Test-Path -LiteralPath $state.RulesPath -PathType Leaf
         $checks.Add((New-CssCheck -Status $(if ($bridgeOkay -and $rulesOkay) { 'PASS' } else { 'FAIL' }) -Control 'Checkpoint bridge' -Evidence 'Exact bridge and rules files exist outside workspace'))
-        $registryOkay = $false
-        if ($state.AuthorizedWorkspacesPath -and (Test-Path -LiteralPath $state.AuthorizedWorkspacesPath -PathType Leaf)) {
-            try {
-                $registry = Get-Content -LiteralPath $state.AuthorizedWorkspacesPath -Raw | ConvertFrom-Json
-                $registeredRoot = [IO.Path]::GetFullPath([string]$state.RegisteredWorkspace)
-                $comparison = if ($env:OS -eq 'Windows_NT') { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
-                $rootRegistered = @($registry.roots | Where-Object { [string]::Equals([IO.Path]::GetFullPath($_), $registeredRoot, $comparison) }).Count -eq 1
-                $commitRegistered = @($registry.commitRoots | Where-Object { [string]::Equals([IO.Path]::GetFullPath($_), $registeredRoot, $comparison) }).Count -eq 1
-                $commitExpected = $state.PSObject.Properties['EnableGitCommitBridge'] -and [bool]$state.EnableGitCommitBridge
-                $prefixesMatch = (@($registry.commitBranchPrefixes | Sort-Object -Unique) -join "`n") -eq (@($state.CommitBranchPrefixes | Sort-Object -Unique) -join "`n")
-                $registryOkay = $registry.schemaVersion -eq 2 -and $rootRegistered -and ($commitRegistered -eq $commitExpected) -and $prefixesMatch
-            }
-            catch {
-                $registryOkay = $false
-            }
-        }
-        $checks.Add((New-CssCheck -Status $(if ($registryOkay) { 'PASS' } else { 'FAIL' }) -Control 'Git bridge authorization' -Evidence 'Registry schema, canonical root, commit opt-in, and branch prefixes match install state'))
         if (-not $SkipCliRuleCheck) {
             $codexCommand = Get-Command codex -ErrorAction SilentlyContinue | Select-Object -First 1
             if (-not $codexCommand) {
@@ -180,7 +163,8 @@ else {
     'A fresh task must prove a direct TCP connection succeeds with a native client such as Test-NetConnection or OpenSSH; a proxy-only banner is not sufficient'
 }
 $checks.Add((New-CssCheck -Status PARTIAL -Control 'Runtime command egress' -Evidence $runtimeNetworkEvidence))
-$checks.Add((New-CssCheck -Status PARTIAL -Control 'Runtime filesystem enforcement' -Evidence 'Restart Codex, select Custom, and run a new sandboxed task to prove OS filesystem enforcement; fully quit all Codex processes only if administrator prompts repeat'))
+$checks.Add((New-CssCheck -Status PARTIAL -Control 'Runtime filesystem enforcement' -Evidence 'Restart Codex and run a new task with the intended profile to prove OS filesystem enforcement; fully quit all Codex processes only if administrator prompts repeat'))
+$checks.Add((New-CssCheck -Status PARTIAL -Control 'Task permission selection' -Evidence 'default_permissions is only the fallback. A UI Full Access selection must produce activePermissionProfile.id = :danger-full-access (or authoritative danger-full-access task metadata); the codexsandboxonline/offline account name is not permission evidence'))
 $checks.Add((New-CssCheck -Status 'NOT CONTROLLED' -Control 'Other egress surfaces' -Evidence 'Web Search, Browser, Computer Use, apps, plugins, MCP, and cloud tasks use separate controls'))
 
 $overall = if (@($checks | Where-Object Status -eq 'FAIL').Count -gt 0) { 'FAILED' } elseif (@($checks | Where-Object Status -eq 'PARTIAL').Count -gt 0) { 'PARTIALLY VERIFIED' } else { 'VERIFIED' }

@@ -37,8 +37,9 @@ if ($codexCli.Version -and $codexCli.Version -match '(\d+\.\d+\.\d+)') {
     $codexVersionSupported = [version]$Matches[1] -ge [version]'0.138.0'
 }
 
-$fullAccess = $configText -match '(?im)^\s*(sandbox_mode\s*=\s*["'']danger-full-access["'']|approval_policy\s*=\s*["'']never["''])' -and $configText -match '(?im)danger-full-access'
 $profileMatch = [regex]::Match($configText, '(?m)^\s*default_permissions\s*=\s*["'']([^"'']+)["'']')
+$sandboxModeMatch = [regex]::Match($configText, '(?m)^\s*sandbox_mode\s*=\s*["'']([^"'']+)["'']')
+$fullAccess = ($profileMatch.Success -and $profileMatch.Groups[1].Value -eq ':danger-full-access') -or ($sandboxModeMatch.Success -and $sandboxModeMatch.Groups[1].Value -eq 'danger-full-access')
 $approvalMatch = [regex]::Match($configText, '(?m)^\s*approval_policy\s*=\s*["'']([^"'']+)["'']')
 $reviewerMatch = [regex]::Match($configText, '(?m)^\s*approvals_reviewer\s*=\s*["'']([^"'']+)["'']')
 $windowsSectionText = Get-CssTomlSectionText -Text $configText -Section 'windows'
@@ -62,7 +63,7 @@ if ($userProfilePath) {
 }
 
 $findings = [Collections.Generic.List[object]]::new()
-if ($fullAccess) { $findings.Add([pscustomobject]@{ Severity = 'HIGH'; Finding = 'Full Access removes the local sandbox boundary.' }) }
+if ($fullAccess) { $findings.Add([pscustomobject]@{ Severity = 'HIGH'; Finding = 'The configured default is Full Access, which removes the local sandbox boundary.' }) }
 if ($legacy.Present -and $profileMatch.Success) { $findings.Add([pscustomobject]@{ Severity = 'HIGH'; Finding = 'Legacy sandbox keys and permission profiles coexist; legacy settings can take precedence.' }) }
 if ($networkEnabled -and -not $networkProxy) { $findings.Add([pscustomobject]@{ Severity = 'HIGH'; Finding = 'Command network is direct and unrestricted; domain rules are not enforced. This is appropriate only when direct protocols are required and unrestricted-network risk was explicitly accepted.' }) }
 if (-not $managedProfile) { $findings.Add([pscustomobject]@{ Severity = 'MEDIUM'; Finding = 'No verified root-deny, workspace-only managed profile was detected.' }) }
@@ -82,7 +83,9 @@ $report = [pscustomobject]@{
     ConfigPath = $resolvedConfig
     ConfigExists = (Test-Path -LiteralPath $resolvedConfig -PathType Leaf)
     FullAccessDetected = [bool]$fullAccess
+    ConfiguredDefaultFullAccess = [bool]$fullAccess
     PermissionProfile = $(if ($profileMatch.Success) { $profileMatch.Groups[1].Value } else { $null })
+    RuntimePermissionSelection = 'NOT OBSERVED: this config assessment cannot see a task-level UI override; inspect activePermissionProfile or authoritative task permission metadata.'
     ManagedLeastPrivilegeProfile = [bool]$managedProfile
     LegacySettings = $legacy
     ApprovalPolicy = $(if ($approvalMatch.Success) { $approvalMatch.Groups[1].Value } else { $null })
@@ -118,7 +121,7 @@ if ($AsJson) {
 
 Write-Output 'Codex Safe Setup - read-only assessment'
 Write-Output ("Config: {0}" -f $resolvedConfig)
-Write-Output ("Full Access: {0}" -f $report.FullAccessDetected)
+Write-Output ("Configured default Full Access: {0}" -f $report.ConfiguredDefaultFullAccess)
 Write-Output ("Permission profile: {0}" -f $(if ($report.PermissionProfile) { $report.PermissionProfile } else { '<not set>' }))
 Write-Output ("Approval: {0} / reviewer: {1}" -f $(if ($report.ApprovalPolicy) { $report.ApprovalPolicy } else { '<not set>' }), $(if ($report.ApprovalReviewer) { $report.ApprovalReviewer } else { '<not set>' }))
 Write-Output ("Command network: {0}; proxy: {1}; route: {2}" -f $report.CommandNetworkEnabled, $report.NetworkProxyEnabled, $report.CommandNetworkRoute)
