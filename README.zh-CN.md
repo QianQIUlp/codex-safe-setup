@@ -8,7 +8,7 @@ Codex Safe Setup 是一个社区维护的 Codex 插件，用来安装最小权�
 
 这个项目要解决的不是“怎样更放心地点批准”，而是更根本的问题：人会判断错，审查用的 AI 也会判断错；Full Access 还可能让凭据和隐私文件进入 Agent 的上下文、日志或工具输出，即使它没有执行破坏命令。硬权限边界可以缩小错误后果，审批只是边界内外的一种工作流。
 
-本项目不能保证绝对安全，也不是 OpenAI 官方项目。
+本项目不能保证绝对安全，也不是 OpenAI 官方项目。它通过第三方 GitHub marketplace 分发，尚未提交到 OpenAI 的通用公共插件目录，也没有被该目录收录。
 
 ## 安装
 
@@ -22,10 +22,31 @@ codex plugin add codex-safe-setup@codex-safe-setup
 新建一个 Codex 任务或 CLI 会话，然后输入：
 
 ```text
-使用 $secure-codex-setup 审计我当前的 Codex 权限，并安装推荐的安全配置。
+使用 $codex-safe-setup 审计我当前的 Codex 权限，并安装推荐的安全配置。
 ```
 
 marketplace 跟随 `main`，其中的目录会把插件固定到最新的正式 Release。也可以从 [Releases](https://github.com/QianQIUlp/codex-safe-setup/releases) 下载可安装 ZIP。
+
+## 更新已有安装
+
+先刷新 GitHub marketplace 快照，再原位重新安装插件包：
+
+```powershell
+codex plugin marketplace upgrade codex-safe-setup
+codex plugin add codex-safe-setup@codex-safe-setup
+```
+
+不要先卸载：卸载既无必要，也不会迁移已经写入机器的配置。新建任务以加载新插件，然后输入：
+
+```text
+使用 $codex-safe-setup 预览并应用我现有 Codex Safe Setup 安装的升级。
+```
+
+升级会先展示原有和目标审批方式、联网模式、Windows 沙箱和工作区选择；确认前不会写入。应用时会创建按事务隔离的备份和不可变的前一状态快照，回滚每次只退回一个配置世代。插件刷新、机器配置迁移、任务激活是三个不同阶段；配置升级后必须完整重启 Codex，并新建任务。
+
+0.1.1 的 `Unrestricted` 用户必须执行 0.1.2 配置迁移：旧版通配符代理并不能让原生 SSH 等直连协议联网。迁移会关闭过滤代理并删除通配符域名表。若保留的是无限制联网和 Windows `Elevated`，仍需重新确认相应风险与一次管理员设置提示。
+
+如果你以前是手动复制 `~/.codex/skills/secure-codex-setup`，而不是通过 marketplace 安装插件，请先把旧目录可恢复地移出技能发现路径，再添加 GitHub marketplace、安装 `codex-safe-setup` 并新建任务。不要让独立旧副本和插件副本同时被发现。
 
 如果你曾按旧文档用固定的 `v0.1.0` 添加 marketplace，只需迁移一次到可更新通道：
 
@@ -49,9 +70,9 @@ codex plugin add codex-safe-setup@codex-safe-setup
 | `AutoReview` | 可选 | 符合条件的越界请求交给审查 Agent；不会增强沙箱。 |
 | 联网 `Off` | 是 | 命令无法访问网络。 |
 | 联网 `Allowlist` | 可选 | 只有明确列出的公开域名可通过命令代理访问。 |
-| 联网 `Unrestricted` | 高风险 | 允许访问任意公网目的地；必须先说明具体风险，再单独确认。 |
+| 联网 `Unrestricted` | 高风险 | 启用直连无限制联网并关闭过滤代理，原生 SSH 等协议可用；必须先说明具体风险，再单独确认。 |
 
-`Unrestricted` 联网本身不会扩大文件系统权限，也不会额外获得删除权限；原有文件权限仍然生效，因此在可写工作区内原本允许的修改和删除仍然可以发生。新增风险是失去网络目的地边界：命令已经能够读取或生成的任何数据，都可能被发送到任意公网地址，包括源码、配置、命令输出、隐私信息，以及文件名没有命中拒绝规则的凭据。网页、Issue、依赖说明还可能携带提示注入，诱导 Agent 外传数据或执行不安全步骤；联网命令也可能下载恶意软件、有漏洞的依赖，或引入许可证受限内容。OpenAI 建议只开放任务实际需要的域名和 HTTP 方法。详见 [Agent internet access](https://learn.chatgpt.com/docs/cloud/internet-access) 与 [Agent approvals & security](https://learn.chatgpt.com/docs/agent-approvals-security)。
+`Unrestricted` 联网本身不会扩大文件系统权限，也不会额外获得删除权限；原有文件权限仍然生效，因此在可写工作区内原本允许的修改和删除仍然可以发生。过滤代理及其域名限制会被关闭，使原生 SSH 等直连协议可用。新增风险是失去网络目的地边界：命令已经能够读取或生成的任何数据，都可能被发送到任意公网地址，包括源码、配置、命令输出、隐私信息，以及文件名没有命中拒绝规则的凭据。网页、Issue、依赖说明还可能携带提示注入，诱导 Agent 外传数据或执行不安全步骤；联网命令也可能下载恶意软件、有漏洞的依赖，或引入许可证受限内容。OpenAI 建议普通任务使用 `Allowlist`，只开放实际需要的目的地。详见 [Agent internet access](https://learn.chatgpt.com/docs/cloud/internet-access) 与 [Agent approvals & security](https://learn.chatgpt.com/docs/agent-approvals-security)。
 
 Windows 上还会分别询问是否安装 PowerShell 7、Codex CLI，以及是否启用需要管理员确认的增强沙箱。拒绝依赖安装不会触发静默安装。PowerShell 7 能减少旧版 PowerShell 的编码、引号、兼容性与语义差异，但它本身不是安全边界。
 
@@ -59,7 +80,7 @@ Windows 上还会分别询问是否安装 PowerShell 7、Codex CLI，以及是�
 
 - 用命名权限配置拒绝文件系统根目录，只保留最小运行时读取，并把写入限制到已登记工作区。
 - 默认拒绝工作区中的 `.env`、私钥、npm 凭据、云凭据等常见敏感文件。
-- 命令联网默认关闭，或经由真正启用的域名白名单代理。
+- 明确选择离线、由代理强制执行的域名白名单，或关闭代理的直连无限制联网。
 - 保留 Codex 对 `.git`、`.codex`、`.agents` 的保护。
 - 可选安装一个范围严格、固定 Git 路径与哈希的检查点桥接器；它不会改当前分支、真实索引或工作树。
 - 备份每个受管理文件，并生成精确回滚命令。
@@ -83,7 +104,11 @@ Web Search、Browser、Computer Use、App、Connector、其他 Plugin、MCP、�
 
 配置检查和 `codex execpolicy check` 是证据，不是对所有未来行为的绝对证明。安装完成后，必须在 Codex 的权限选择器中选择 **自定义（Custom）**，确认当前配置为 `codex-safe-workspace`，不要切回 Full Access。Windows 上先重启 Codex 并新建任务，不要继续使用安装前的旧任务；只有管理员提示反复出现时，才需要完整退出所有 Codex 桌面窗口和 CLI 进程后重新启动。其他平台新建任务或 CLI 会话后再做运行时验证。
 
-Windows 上推荐的 `Elevated` 沙箱需要管理员确认操作系统级初始化，但工作区内的每条命令不应逐次提权。如果管理员提示反复出现，请运行只读审计并查看 `WindowsSandboxSetupHealth`。历史上发生过端口变化、但最新设置已经对齐时只记为信息，无需处理；只有当前仍冲突或继续反转时，才完整退出全部 Codex 进程并重新启动一次。不要仅为了隐藏这个生命周期问题而降级到 `Unelevated`。
+运行时验证必须匹配模式：`Off` 要证明可达目标被阻断；`Allowlist` 要证明白名单目标经代理成功、未列出目标失败；`Unrestricted` 要用直连 TCP 或原生 OpenSSH 成功，代理横幅不能作为直连证据。
+
+Windows 上推荐的 `Elevated` 沙箱需要管理员确认操作系统级初始化，但工作区内的每条命令不应逐次提权。如果管理员提示反复出现，请运行只读审计并查看 `WindowsSandboxSetupHealth`。`Allowlist` 期望代理端口 3128 和 8081，`Off` 与直连 `Unrestricted` 期望空端口集。历史上发生过端口变化、但最新设置已经对齐时只记为信息，无需处理；只有当前仍冲突或继续反转时，才完整退出全部 Codex 进程并重新启动一次。不要仅为了隐藏这个生命周期问题而降级到 `Unelevated`。
+
+带版本的安装状态会保留按事务隔离的备份和不可变的前一状态快照。升级后的回滚会同时恢复上一代受管理文件和上一代活动状态，因此可以按世代继续回滚。
 
 可选检查点会把已跟踪文件和普通未跟踪文件保存到 `refs/codex-safe/checkpoints/*` 隐藏引用中。它拒绝敏感未跟踪文件，也不会自动运行 `reset --hard`、`clean`、替换分支或原地恢复。详见[实现原理](docs/how-it-works.md)。
 

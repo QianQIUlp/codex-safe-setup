@@ -39,7 +39,7 @@ Approval is deliberately treated as a separate workflow decision. A person or re
 | Accidental deletion inside the project | Hidden Git checkpoint ref | Ignored files and sensitive refused files are absent |
 | Reading credentials outside the project | Root deny plus minimal runtime reads | The runtime-defined minimal set must be trusted |
 | Reading credentials inside the project | Deny globs for common sensitive names | Unusual filenames require additional deny rules |
-| Shell-based data exfiltration | Network off or active proxy allowlist | An allowed domain can still receive data; wildcard public access removes destination containment |
+| Shell-based data exfiltration | Network off or active proxy allowlist | An allowed domain can still receive data; direct unrestricted access removes destination containment |
 | Prompt injection from network content | Minimize allowed destinations and treat remote instructions as untrusted | Allowed pages, issues, and dependency documentation can still manipulate the agent |
 | Malicious, vulnerable, or restricted downloads | Narrow network access and review dependency/content changes | An allowed source can still be compromised or carry restricted content |
 | Human or reviewer error | Hard capability boundaries | In-boundary actions can still be harmful |
@@ -52,7 +52,7 @@ Approval is deliberately treated as a separate workflow decision. A person or re
 
 Reading a credential can be an exposure event even when the agent never prints it intentionally. A value may enter model context, command output, logs, repository history, or another tool invocation. This project therefore blocks common credential paths instead of relying only on a promise not to use their contents.
 
-Enabling unrestricted command networking does not change the filesystem profile or add deletion authority. It does remove the public-destination boundary: data already readable by a sandboxed command can be transmitted to any public destination. Files that are writable inside the workspace remain changeable or deletable regardless of the network choice.
+Enabling unrestricted command networking does not change the filesystem profile or add deletion authority. It disables the filtering proxy and domain enforcement so direct protocols such as SSH can work. This removes the public-destination boundary: data already readable by a sandboxed command can be transmitted to any public destination. Files that are writable inside the workspace remain changeable or deletable regardless of the network choice.
 
 Timing alone does not prove that a later account compromise was caused by an agent run. If a real credential may have been exposed:
 
@@ -81,3 +81,4 @@ Configuration parsing, file inspection, and `codex execpolicy check` show that t
 - Capturing secrets in checkpoints.
 - Automatically restoring or overwriting a working tree.
 - Weakening other security controls to make installation easier.
+

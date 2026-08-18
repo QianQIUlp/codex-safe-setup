@@ -7,9 +7,12 @@ $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $manifestPath = Join-Path $repositoryRoot '.codex-plugin/plugin.json'
 $marketplacePath = Join-Path $repositoryRoot '.agents/plugins/marketplace.json'
-$skillRoot = Join-Path $repositoryRoot 'skills/secure-codex-setup'
+$skillRoot = Join-Path $repositoryRoot 'skills/codex-safe-setup'
 $skillPath = Join-Path $skillRoot 'SKILL.md'
 $openAiYamlPath = Join-Path $skillRoot 'agents/openai.yaml'
+$legacySkillRoot = Join-Path $repositoryRoot 'skills/secure-codex-setup'
+$legacySkillPath = Join-Path $legacySkillRoot 'SKILL.md'
+$upgradeScriptPath = Join-Path $skillRoot 'scripts/Upgrade-CodexSafety.ps1'
 
 function Assert-True {
     param([bool]$Condition, [string]$Message)
@@ -23,6 +26,8 @@ $requiredFiles = @(
     $marketplacePath,
     $skillPath,
     $openAiYamlPath,
+    $legacySkillPath,
+    $upgradeScriptPath,
     (Join-Path $repositoryRoot 'README.md'),
     (Join-Path $repositoryRoot 'README.zh-CN.md'),
     (Join-Path $repositoryRoot 'LICENSE'),
@@ -39,6 +44,7 @@ foreach ($file in $requiredFiles) {
 $manifestText = [IO.File]::ReadAllText($manifestPath)
 $manifest = $manifestText | ConvertFrom-Json
 Assert-True ($manifest.name -eq 'codex-safe-setup') 'Plugin name must remain codex-safe-setup.'
+Assert-True ($manifest.version -eq '0.1.2') 'Release package must use version 0.1.2.'
 Assert-True ($manifest.version -match '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$') 'Plugin version must be strict semver.'
 Assert-True (-not [string]::IsNullOrWhiteSpace($manifest.description)) 'Plugin description is required.'
 Assert-True (-not [string]::IsNullOrWhiteSpace($manifest.author.name)) 'Plugin author name is required.'
@@ -65,13 +71,15 @@ Assert-True ($entry.policy.authentication -eq 'ON_INSTALL') 'Marketplace authent
 $skillText = [IO.File]::ReadAllText($skillPath)
 $frontmatter = [regex]::Match($skillText, '(?s)\A---\r?\n(?<yaml>.*?)\r?\n---\r?\n')
 Assert-True $frontmatter.Success 'SKILL.md must begin with YAML frontmatter.'
-Assert-True ($frontmatter.Groups['yaml'].Value -match '(?m)^name:\s*secure-codex-setup\s*$') 'Skill name is missing or stale.'
+Assert-True ($frontmatter.Groups['yaml'].Value -match '(?m)^name:\s*codex-safe-setup\s*$') 'Skill name is missing or stale.'
 Assert-True ($frontmatter.Groups['yaml'].Value -match '(?m)^description:\s*\S') 'Skill description is required.'
 Assert-True ($frontmatter.Groups['yaml'].Value -notmatch '(?m)^(?!name:|description:|\s*$)[A-Za-z0-9_-]+:') 'Skill frontmatter may contain only name and description.'
 Assert-True ($skillText -notmatch '\[TODO:') 'SKILL.md contains a TODO placeholder.'
 Assert-True ($skillText -match 'does not itself expand filesystem permissions or add deletion authority') 'Skill must distinguish network risk from filesystem authority.'
 Assert-True ($skillText -match 'prompt injection') 'Skill must disclose prompt-injection risk before unrestricted networking.'
 Assert-True ($skillText -match 'malware or vulnerable dependencies') 'Skill must disclose download and dependency risk before unrestricted networking.'
+Assert-True ($skillText -match 'Allowlist.*filtering proxy') 'Skill must preserve proxy-enforced domain filtering for Allowlist mode.'
+Assert-True ($skillText -match 'Unrestricted.*disables the proxy.*SSH') 'Skill must define Unrestricted as direct networking for native protocols.'
 Assert-True ($skillText -match 'choose `Custom`') 'Skill must require the Custom permission selection after installation.'
 Assert-True ($skillText -match '`codex-safe-workspace` is the selected profile') 'Skill must name the profile the user should activate.'
 Assert-True ($skillText -match 'fully quit every Codex desktop window and CLI process') 'Skill must require a complete Windows process shutdown after installation.'
@@ -80,9 +88,37 @@ Assert-True ($skillText -match 'Repeated administrator prompts are a failure sig
 $openAiYaml = [IO.File]::ReadAllText($openAiYamlPath)
 Assert-True ($openAiYaml -match '(?m)^\s*display_name:\s*"[^"]+"\s*$') 'openai.yaml display_name is required and must be quoted.'
 Assert-True ($openAiYaml -match '(?m)^\s*short_description:\s*"[^"]{25,64}"\s*$') 'openai.yaml short_description must be quoted and 25-64 characters.'
-Assert-True ($openAiYaml -match '(?m)^\s*default_prompt:\s*"[^"]*\$secure-codex-setup[^"]*"\s*$') 'openai.yaml default_prompt must mention $secure-codex-setup.'
+$legacySkillText = [IO.File]::ReadAllText($legacySkillPath)
+Assert-True ($legacySkillText -match '(?m)^name:\s*secure-codex-setup\s*\s*"[^"]*\$codex-safe-setup[^"]*"\s*$') 'openai.yaml default_prompt must mention $codex-safe-setup.'
 
-$powerShellFiles = Get-ChildItem -LiteralPath $repositoryRoot -Recurse -File -Filter '*.ps1' |
+$powerShellFiles = Get-ChildItem -LiteralPath $repositoryRoot -Recurse -File -Filter '*.ps1' -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -notlike (Join-Path $repositoryRoot 'dist*') }
+foreach ($file in $powerShellFiles) {
+    $tokens = $null
+    $parseErrors = $null
+    [void][System.Management.Automation.Language.Parser]::ParseFile(
+        $file.FullName,
+        [ref]$tokens,
+        [ref]$parseErrors
+    )
+    if ($parseErrors.Count -gt 0) {
+        throw ("PowerShell parse error in {0}: {1}" -f $file.FullName, ($parseErrors.Message -join '; '))
+    }
+}
+
+Write-Output 'PASS: plugin manifest and release metadata'
+Write-Output 'PASS: Git-backed marketplace metadata'
+Write-Output 'PASS: canonical skill, compatibility alias, and UI metadata'
+Write-Output 'PASS: unrestricted-network disclosure and Windows Custom activation handoff'
+Write-Output 'PASS: required community and security documentation'
+Write-Output ("PASS: PowerShell syntax ({0} files)" -f $powerShellFiles.Count)
+
+) 'Legacy compatibility alias must retain the old skill name.'
+Assert-True ($legacySkillText -match '\$codex-safe-setup') 'Legacy compatibility alias must delegate to the canonical skill.'
+$legacyOpenAiYaml = [IO.File]::ReadAllText((Join-Path $legacySkillRoot 'agents/openai.yaml'))
+Assert-True ($legacyOpenAiYaml -match '(?m)^\s*allow_implicit_invocation:\s*false\s*\s*"[^"]*\$codex-safe-setup[^"]*"\s*$') 'openai.yaml default_prompt must mention $codex-safe-setup.'
+
+$powerShellFiles = Get-ChildItem -LiteralPath $repositoryRoot -Recurse -File -Filter '*.ps1' -ErrorAction SilentlyContinue |
     Where-Object { $_.FullName -notlike (Join-Path $repositoryRoot 'dist*') }
 foreach ($file in $powerShellFiles) {
     $tokens = $null
@@ -103,3 +139,33 @@ Write-Output 'PASS: skill frontmatter and UI metadata'
 Write-Output 'PASS: unrestricted-network disclosure and Windows Custom activation handoff'
 Write-Output 'PASS: required community and security documentation'
 Write-Output ("PASS: PowerShell syntax ({0} files)" -f $powerShellFiles.Count)
+
+) 'Legacy compatibility alias must not be selected implicitly.'
+$upgradeScriptText = [IO.File]::ReadAllText($upgradeScriptPath)
+Assert-True ($upgradeScriptText -match 'ConfirmUpgrade') 'Dedicated upgrade flow must require explicit upgrade confirmation.'
+Assert-True ($upgradeScriptText -match 'Upgrade\s*=\s*\$true') 'Dedicated upgrade flow must invoke installer upgrade mode.'
+
+Assert-True ($openAiYaml -match '(?m)^\s*default_prompt:\s*"[^"]*\$codex-safe-setup[^"]*"\s*$') 'openai.yaml default_prompt must mention $codex-safe-setup.'
+
+$powerShellFiles = Get-ChildItem -LiteralPath $repositoryRoot -Recurse -File -Filter '*.ps1' -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -notlike (Join-Path $repositoryRoot 'dist*') }
+foreach ($file in $powerShellFiles) {
+    $tokens = $null
+    $parseErrors = $null
+    [void][System.Management.Automation.Language.Parser]::ParseFile(
+        $file.FullName,
+        [ref]$tokens,
+        [ref]$parseErrors
+    )
+    if ($parseErrors.Count -gt 0) {
+        throw ("PowerShell parse error in {0}: {1}" -f $file.FullName, ($parseErrors.Message -join '; '))
+    }
+}
+
+Write-Output 'PASS: plugin manifest and release metadata'
+Write-Output 'PASS: Git-backed marketplace metadata'
+Write-Output 'PASS: skill frontmatter and UI metadata'
+Write-Output 'PASS: unrestricted-network disclosure and Windows Custom activation handoff'
+Write-Output 'PASS: required community and security documentation'
+Write-Output ("PASS: PowerShell syntax ({0} files)" -f $powerShellFiles.Count)
+

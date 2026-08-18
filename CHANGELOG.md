@@ -2,6 +2,17 @@
 
 All notable changes are documented here. Releases follow semantic versioning.
 
+## 0.1.2 - 2026-08-18
+
+- Fix `Unrestricted` command networking to use direct networking with the filtering proxy disabled, so native protocols such as OpenSSH are not trapped behind the offline sandbox account's proxy route.
+- Keep `Allowlist` proxy-filtered and `Off` fully offline; remove obsolete wildcard domain state from direct networking.
+- Rename the canonical skill from `secure-codex-setup` to `codex-safe-setup` and retain the old name as an explicit-only compatibility alias for 0.1.1 users.
+- Add a dedicated, plan-first upgrade command that preserves prior choices, requires security acknowledgements again when applicable, and refuses accidental first-installer overwrites.
+- Add state schema 2, product and transaction versions, transaction-scoped backups, immutable previous-state snapshots, and chained rollback.
+- Document and test the separate plugin-refresh, machine-configuration migration, and fresh-task activation phases.
+- Mark the project accurately as a third-party GitHub marketplace plugin that is not listed in OpenAI's universal public directory.
+- Required action for existing 0.1.1 `Unrestricted` users: refresh/reinstall the plugin, run the configuration upgrade, fully restart Codex, and verify direct TCP or native OpenSSH in a fresh task.
+
 ## 0.1.1 - 2026-08-16
 
 - Explain the concrete consequences of unrestricted command networking before acknowledgement: destination-unbounded exfiltration, prompt injection, unsafe downloads, and license risk.
