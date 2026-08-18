@@ -6,8 +6,10 @@ on:
     paths:
       - ".codex-plugin/plugin.json"
       - ".agents/plugins/marketplace.json"
+      - ".github/workflows/auto-tag.yml"
 
 permissions:
+  actions: write
   contents: write
 
 concurrency:
@@ -34,7 +36,9 @@ jobs:
         run: |
           ./tests/Validate-Package.ps1
           ./tests/Run-Tests.ps1
+
       - name: Validate and create missing release tag
+        id: release
         shell: pwsh
         run: |
           $manifest = Get-Content ./.codex-plugin/plugin.json -Raw | ConvertFrom-Json
@@ -53,15 +57,56 @@ jobs:
 
           git ls-remote --exit-code --tags origin "refs/tags/$tag" *> $null
           if ($LASTEXITCODE -eq 0) {
+            git fetch --force --tags origin
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to fetch existing release tag $tag."
+            }
+            $tagManifestText = (& git show "$($tag):.codex-plugin/plugin.json") -join "`n"
+            if ($LASTEXITCODE -ne 0) {
+              throw "Existing tag $tag does not contain the plugin manifest."
+            }
+            $tagMarketplaceText = (& git show "$($tag):.agents/plugins/marketplace.json") -join "`n"
+            if ($LASTEXITCODE -ne 0) {
+              throw "Existing tag $tag does not contain the marketplace catalog."
+            }
+            $tagManifest = $tagManifestText | ConvertFrom-Json
+            $tagMarketplace = $tagMarketplaceText | ConvertFrom-Json
+            if ([string]$tagManifest.version -ne $version -or $tagMarketplace.plugins[0].source.ref -ne $tag) {
+              throw "Existing tag $tag does not contain the expected package metadata."
+            }
             Write-Output "Release tag already exists: $tag"
-            exit 0
-          }
-          if ($LASTEXITCODE -ne 2) {
+          } elseif ($LASTEXITCODE -eq 2) {
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a $tag -m "Codex Safe Setup $tag"
+            git push origin "refs/tags/$tag"
+          } else {
             throw "Unable to determine whether release tag $tag exists."
           }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a $tag -m "Codex Safe Setup $tag"
-          git push origin "refs/tags/$tag"
+      - name: Dispatch the release workflow
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          $releaseJson = gh release view $env:RELEASE_TAG --json isDraft,isPrerelease,assets 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            $release = $releaseJson | ConvertFrom-Json
+            $expectedAssets = @(
+              "codex-safe-setup-$($env:RELEASE_TAG).zip",
+              "codex-safe-setup-$($env:RELEASE_TAG).zip.sha256"
+            )
+            $actualAssets = @($release.assets | ForEach-Object { $_.name } | Sort-Object)
+            if (-not $release.isDraft -and -not $release.isPrerelease -and
+                (($expectedAssets | Sort-Object) -join "`n") -eq ($actualAssets -join "`n")) {
+              Write-Output "Release and expected assets already exist: $env:RELEASE_TAG"
+              exit 0
+            }
+          }
 
+          gh workflow run release.yml --ref main -f "tag=$env:RELEASE_TAG"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to dispatch the release workflow for $env:RELEASE_TAG."
+          }
