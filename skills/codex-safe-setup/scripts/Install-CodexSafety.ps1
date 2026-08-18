@@ -10,6 +10,7 @@ param(
     [string]$CodexHome,
     [string]$ConfigPath,
     [string]$StateRoot,
+    [switch]$Upgrade,
     [switch]$MigrateLegacySettings,
     [switch]$AcknowledgeRisk,
     [switch]$AcknowledgeAdminSetup,
@@ -24,6 +25,39 @@ $ErrorActionPreference = 'Stop'
 $resolvedHome = Get-CssCodexHome -Override $CodexHome
 $resolvedConfig = Get-CssConfigPath -CodexHome $resolvedHome -Override $ConfigPath
 $resolvedState = Get-CssStateRoot -CodexHome $resolvedHome -Override $StateRoot
+$statePath = Join-Path $resolvedState 'install-state.json'
+$existingState = $null
+$existingStateText = $null
+if (Test-Path -LiteralPath $statePath -PathType Leaf) {
+    try {
+        $existingStateText = Get-Content -LiteralPath $statePath -Raw
+        $existingState = $existingStateText | ConvertFrom-Json
+    }
+    catch {
+        throw "Existing install state is unreadable. Refusing to overwrite it: $statePath"
+    }
+}
+if ($existingState -and -not $Upgrade) {
+    throw "An existing Codex Safe Setup installation was found. Use Upgrade-CodexSafety.ps1 so prior choices, backups, and rollback history are preserved."
+}
+if ($Upgrade -and -not $existingState) {
+    throw "Upgrade requested, but no install state exists at $statePath. Use Install-CodexSafety.ps1 for a first installation."
+}
+if ($existingState -and $existingState.PSObject.Properties['schemaVersion'] -and [int]$existingState.schemaVersion -gt $script:CssStateSchemaVersion) {
+    throw "Install state schema $($existingState.schemaVersion) is newer than this installer supports. Update the plugin before changing configuration."
+}
+$previousVersion = if ($existingState -and $existingState.PSObject.Properties['productVersion']) {
+    [string]$existingState.productVersion
+}
+elseif ($existingState -and $existingState.PSObject.Properties['installerVersion']) {
+    [string]$existingState.installerVersion
+}
+elseif ($existingState) {
+    '0.1.1-or-earlier'
+}
+else {
+    $null
+}
 $filesystemRoot = [IO.Path]::GetPathRoot($resolvedHome)
 $pathTrimCharacters = [char[]]@([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
 $pathComparison = if ($env:OS -eq 'Windows_NT') { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
@@ -55,6 +89,9 @@ if ($legacy.Present -and -not $MigrateLegacySettings) {
 if ($NetworkMode -eq 'Allowlist' -and $AllowedDomain.Count -eq 0) {
     throw 'Allowlist mode requires at least one -AllowedDomain.'
 }
+if ($NetworkMode -ne 'Allowlist' -and $AllowedDomain.Count -gt 0) {
+    throw '-AllowedDomain is valid only with -NetworkMode Allowlist.'
+}
 foreach ($domain in $AllowedDomain) {
     if ($domain -notmatch '^(\*\*?\.)?([A-Za-z0-9-]+\.)*[A-Za-z0-9-]+$') {
         throw "Invalid domain pattern '$domain'. Use a hostname or a leading *. / **. wildcard without a scheme, port, path, or quotes."
@@ -63,7 +100,7 @@ foreach ($domain in $AllowedDomain) {
 
 $unrestrictedRiskSummary = @(
     'This network choice does not expand filesystem permissions or add deletion authority; existing workspace write and delete capability still applies.'
-    'The public-destination boundary is removed, so any data a command can already read or generate could be sent to any public Internet destination, including source, configuration, private data, command output, or credentials missed by filename deny rules.'
+    'The command proxy and its destination filter are disabled so ordinary direct-network protocols, including SSH, can work. Any data a command can already read or generate could be sent to any public Internet destination, including source, configuration, private data, command output, or credentials missed by filename deny rules.'
     'Untrusted pages, issues, and dependency documentation can contain prompt injection; networked commands can also download malware, vulnerable dependencies, or license-restricted content.'
     'Unrestricted access does not mean a leak will happen automatically, but it increases the possible consequence of human, model, or prompt-injection mistakes. Prefer Allowlist for normal work.'
 ) -join ' '
@@ -83,9 +120,9 @@ $newConfig = Set-CssTomlTopLevelValue -Text $newConfig -Key 'default_permissions
 $newConfig = Set-CssTomlTopLevelValue -Text $newConfig -Key 'approval_policy' -Literal (ConvertTo-CssTomlString $approvalPolicy)
 $newConfig = Set-CssTomlTopLevelValue -Text $newConfig -Key 'approvals_reviewer' -Literal (ConvertTo-CssTomlString $approvalReviewer)
 
-if ($NetworkMode -ne 'Off') {
-    $newConfig = Set-CssTomlSectionValue -Text $newConfig -Section 'features' -Key 'network_proxy' -Literal 'true'
-}
+# Network filtering is active only for Allowlist; Off and Unrestricted disable stale proxy state.
+$proxyEnabled = $NetworkMode -eq 'Allowlist'
+$newConfig = Set-CssTomlSectionValue -Text $newConfig -Section 'features' -Key 'network_proxy' -Literal $(if ($proxyEnabled) { 'true' } else { 'false' })
 if ($WindowsSandbox -ne 'Keep' -and $env:OS -eq 'Windows_NT') {
     $sandboxLiteral = if ($WindowsSandbox -eq 'Elevated') { 'elevated' } else { 'unelevated' }
     $newConfig = Set-CssTomlSectionValue -Text $newConfig -Section 'windows' -Key 'sandbox' -Literal (ConvertTo-CssTomlString $sandboxLiteral)
@@ -116,16 +153,11 @@ if ($ProtectWorkspaceSecrets) {
 $managedLines.Add('')
 $managedLines.Add("[permissions.$($script:CssProfileName).network]")
 $managedLines.Add('enabled = ' + $(if ($NetworkMode -eq 'Off') { 'false' } else { 'true' }))
-if ($NetworkMode -eq 'Allowlist' -or $NetworkMode -eq 'Unrestricted') {
+if ($NetworkMode -eq 'Allowlist') {
     $managedLines.Add('')
     $managedLines.Add("[permissions.$($script:CssProfileName).network.domains]")
-    if ($NetworkMode -eq 'Unrestricted') {
-        $managedLines.Add('"*" = "allow"')
-    }
-    else {
-        foreach ($domain in ($AllowedDomain | Sort-Object -Unique)) {
-            $managedLines.Add((ConvertTo-CssTomlString $domain) + ' = "allow"')
-        }
+    foreach ($domain in ($AllowedDomain | Sort-Object -Unique)) {
+        $managedLines.Add((ConvertTo-CssTomlString $domain) + ' = "allow"')
     }
 }
 $managedLines.Add($script:CssManagedEnd)
@@ -140,14 +172,32 @@ if ($WorkspacePath) {
     $gitExecutableForBridge = [IO.Path]::GetFullPath($gitCommandForBridge.Source)
     $gitExecutableHash = (Get-FileHash -LiteralPath $gitExecutableForBridge -Algorithm SHA256).Hash
 }
+$recordedWorkspace = $resolvedWorkspace
+if (-not $recordedWorkspace -and $existingState -and $existingState.PSObject.Properties['RegisteredWorkspace']) {
+    $recordedWorkspace = [string]$existingState.RegisteredWorkspace
+}
+
+$operation = if ($Upgrade) { 'Upgrade' } else { 'Install' }
+$previousApprovalMode = if ($existingState -and $existingState.PSObject.Properties['ApprovalMode']) { [string]$existingState.ApprovalMode } else { $null }
+$previousNetworkMode = if ($existingState -and $existingState.PSObject.Properties['NetworkMode']) { [string]$existingState.NetworkMode } else { $null }
+$previousWindowsSandbox = if ($existingState -and $existingState.PSObject.Properties['WindowsSandbox']) { [string]$existingState.WindowsSandbox } else { $null }
 
 $plan = [pscustomobject]@{
+    Operation = $operation
+    ProductVersion = $script:CssProductVersion
+    StateSchema = $script:CssStateSchemaVersion
+    PreviousVersion = $previousVersion
+    PreviousApprovalMode = $previousApprovalMode
+    PreviousNetworkMode = $previousNetworkMode
+    PreviousWindowsSandbox = $previousWindowsSandbox
+    ConfigurationChanged = [bool]($newConfig -ne $existingConfig)
     ConfigPath = $resolvedConfig
     StateRoot = $resolvedState
     ApprovalMode = $ApprovalMode
     ApprovalPolicy = $approvalPolicy
     ApprovalReviewer = $approvalReviewer
     NetworkMode = $NetworkMode
+    NetworkRoute = $(switch ($NetworkMode) { 'Off' { 'Offline; proxy disabled' } 'Allowlist' { 'Proxy-enforced domain allowlist' } 'Unrestricted' { 'Direct unrestricted network; proxy disabled' } })
     AllowedDomains = $AllowedDomain
     NetworkRisk = $(if ($NetworkMode -eq 'Unrestricted') { $unrestrictedRiskSummary } else { 'No unrestricted command-network access selected.' })
     Filesystem = 'deny root; read minimal runtime; write workspace roots'
@@ -155,7 +205,7 @@ $plan = [pscustomobject]@{
     AllowTempWrite = $AllowTempWrite
     WindowsSandbox = $WindowsSandbox
     MigrateLegacySettings = [bool]$MigrateLegacySettings
-    RegisteredWorkspace = $resolvedWorkspace
+    RegisteredWorkspace = $recordedWorkspace
     CheckpointBridge = $(if ($resolvedWorkspace) { 'Install when PowerShell 7 is available' } else { 'Not requested' })
     ExternalSurfaces = 'Web Search, Browser, Computer Use, apps, plugins, MCP, and cloud tasks are not controlled.'
 }
@@ -172,6 +222,7 @@ if ($NetworkMode -eq 'Unrestricted' -and -not $AcknowledgeRisk) {
     Write-Warning 'Unrestricted command-network risk disclosure:'
     Write-Output '  - This choice does not expand filesystem permissions or add deletion authority; existing workspace write and delete capability still applies.'
     Write-Output '  - Any data a command can already read or generate could be sent to any public Internet destination, including source, configuration, private data, command output, or credentials missed by filename deny rules.'
+    Write-Output '  - Direct protocols such as native SSH are enabled because the filtering proxy is disabled.'
     Write-Output '  - Prompt injection in pages, issues, or dependency documentation can induce exfiltration or unsafe commands.'
     Write-Output '  - Networked commands can download malware, vulnerable dependencies, or license-restricted content.'
     Write-Output '  - A leak is not automatic, but removing destination containment increases the consequence of mistakes. Prefer Allowlist for normal work.'
@@ -190,7 +241,10 @@ if (-not $ConfirmApply) {
 }
 
 $timestamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
-$backupRoot = Join-Path $resolvedState 'backups'
+$transactionId = '{0}-{1}' -f $timestamp, [guid]::NewGuid().ToString('N').Substring(0, 8)
+$historyRoot = Join-Path $resolvedState 'state-history'
+$backupRoot = Join-Path (Join-Path $resolvedState 'backups') $transactionId
+$previousStateSnapshot = $null
 $binaryRoot = Join-Path $resolvedState 'bin'
 $rulesRoot = Join-Path $resolvedHome 'rules'
 $rulesPath = Join-Path $rulesRoot 'codex-safe-setup.rules'
@@ -211,6 +265,11 @@ $originalCanaryExists = Test-Path -LiteralPath $canaryPath -PathType Leaf
 New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $binaryRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $rulesRoot -Force | Out-Null
+New-Item -ItemType Directory -Path $historyRoot -Force | Out-Null
+if ($existingStateText) {
+    $previousStateSnapshot = Join-Path $historyRoot ("install-state.{0}.{1}.json" -f $timestamp, $transactionId)
+    Write-CssTextAtomic -Path $previousStateSnapshot -Text $existingStateText
+}
 if ($originalConfigExists) { Copy-Item -LiteralPath $resolvedConfig -Destination $configBackup -Force }
 if ($originalRulesExists) { Copy-Item -LiteralPath $rulesPath -Destination $rulesBackup -Force }
 if ($originalBridgeExists) { Copy-Item -LiteralPath $bridgePath -Destination $bridgeBackup -Force }
@@ -273,6 +332,12 @@ prefix_rule(
     }
 
     $state = [pscustomobject]@{
+        schemaVersion = $script:CssStateSchemaVersion
+        productVersion = $script:CssProductVersion
+        operation = $operation
+        transactionId = $transactionId
+        previousVersion = $previousVersion
+        previousStateSnapshot = $previousStateSnapshot
         InstalledAtUtc = [DateTime]::UtcNow.ToString('o')
         ConfigPath = $resolvedConfig
         OriginalConfigExists = $originalConfigExists
@@ -295,8 +360,12 @@ prefix_rule(
         CanaryTouched = $canaryTouched
         ApprovalMode = $ApprovalMode
         NetworkMode = $NetworkMode
+        AllowedDomains = @($AllowedDomain | Sort-Object -Unique)
+        ProtectWorkspaceSecrets = $ProtectWorkspaceSecrets
+        AllowTempWrite = $AllowTempWrite
+        MigrateLegacySettings = [bool]$MigrateLegacySettings
         WindowsSandbox = $WindowsSandbox
-        RegisteredWorkspace = $resolvedWorkspace
+        RegisteredWorkspace = $recordedWorkspace
     }
     Write-CssTextAtomic -Path (Join-Path $resolvedState 'install-state.json') -Text ($state | ConvertTo-Json -Depth 5)
 }
@@ -317,11 +386,16 @@ catch {
         if ($originalCanaryExists) { Copy-Item -LiteralPath $canaryBackup -Destination $canaryPath -Force }
         elseif (Test-Path -LiteralPath $canaryPath) { Remove-Item -LiteralPath $canaryPath -Force }
     }
+    if ($previousStateSnapshot -and (Test-Path -LiteralPath $previousStateSnapshot -PathType Leaf)) {
+        Remove-Item -LiteralPath $previousStateSnapshot -Force
+    }
     throw
 }
 
 [pscustomobject]@{
-    Status = 'INSTALLED_RESTART_REQUIRED'
+    Status = $(if ($Upgrade) { 'UPGRADED_RESTART_REQUIRED' } else { 'INSTALLED_RESTART_REQUIRED' })
+    ProductVersion = $script:CssProductVersion
+    TransactionId = $transactionId
     ConfigPath = $resolvedConfig
     BackupPath = $(if ($originalConfigExists) { $configBackup } else { '<new config; rollback removes it>' })
     CheckpointBridgeInstalled = $bridgeInstalled
@@ -331,3 +405,4 @@ catch {
     RequiredRestart = $(if ($env:OS -eq 'Windows_NT') { 'Restart Codex and start a new task; do not resume a pre-install task because its proxy and sandbox state cannot be updated retroactively. If administrator prompts repeat, fully quit every Codex desktop window and CLI process, then relaunch once.' } else { 'Start a new Codex task or CLI session; the current execution environment does not retroactively adopt the new profile.' })
     RequiredElevatedSetup = $(if ($WindowsSandbox -eq 'Elevated' -and $env:OS -eq 'Windows_NT') { 'After relaunch, approve the Windows sandbox administrator setup once if prompted. Repeated prompts are not normal; run the assessment before changing sandbox mode.' } else { 'Not applicable.' })
 }
+

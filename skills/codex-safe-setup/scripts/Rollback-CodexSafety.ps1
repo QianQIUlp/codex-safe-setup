@@ -13,6 +13,9 @@ $resolvedState = Get-CssStateRoot -CodexHome $resolvedHome -Override $StateRoot
 $statePath = Join-Path $resolvedState 'install-state.json'
 if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) { throw "Install state not found: $statePath" }
 $state = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+if ($state.PSObject.Properties['schemaVersion'] -and [int]$state.schemaVersion -gt $script:CssStateSchemaVersion) {
+    throw "Install state schema $($state.schemaVersion) is newer than this rollback tool supports."
+}
 
 $pathComparison = if ($env:OS -eq 'Windows_NT') { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
 $expectedConfig = [IO.Path]::GetFullPath((Join-Path $resolvedHome 'config.toml'))
@@ -39,12 +42,21 @@ foreach ($backupPath in @($state.ConfigBackup, $state.RulesBackup, $state.Bridge
         throw 'Install state contains a backup path outside the safe-setup backup directory. Refusing rollback.'
     }
 }
+$previousStateSnapshot = $null
+if ($state.PSObject.Properties['previousStateSnapshot'] -and $state.previousStateSnapshot) {
+    $previousStateSnapshot = [IO.Path]::GetFullPath([string]$state.previousStateSnapshot)
+    $expectedHistoryRoot = [IO.Path]::GetFullPath((Join-Path $resolvedState 'state-history')) + [IO.Path]::DirectorySeparatorChar
+    if (-not $previousStateSnapshot.StartsWith($expectedHistoryRoot, $pathComparison) -or -not (Test-Path -LiteralPath $previousStateSnapshot -PathType Leaf)) {
+        throw 'Install state contains an invalid previous-state snapshot. Refusing rollback.'
+    }
+}
 
 Write-Output 'Codex Safe Setup - rollback plan'
 Write-Output ("Config: {0}" -f $state.ConfigPath)
 Write-Output ("Original config existed: {0}" -f $state.OriginalConfigExists)
 Write-Output ("Config backup: {0}" -f $(if ($state.ConfigBackup) { $state.ConfigBackup } else { '<none; installed file will be removed>' }))
 Write-Output ("Rules: {0}" -f $state.RulesPath)
+Write-Output ("Previous state snapshot: {0}" -f $(if ($previousStateSnapshot) { $previousStateSnapshot } else { '<none; this is the first installation>' }))
 if (-not $ConfirmRollback) {
     if ($NonInteractive) { throw 'Non-interactive rollback requires -ConfirmRollback.' }
     $answer = Read-Host 'Restore the recorded configuration and rule state? [y/N]'
@@ -98,6 +110,21 @@ if ($state.CanaryTouched) {
         Remove-Item -LiteralPath $state.CanaryPath -Force
     }
 }
-$state | Add-Member -NotePropertyName RolledBackAtUtc -NotePropertyValue ([DateTime]::UtcNow.ToString('o')) -Force
-Write-CssTextAtomic -Path $statePath -Text ($state | ConvertTo-Json -Depth 5)
+$rolledBackAt = [DateTime]::UtcNow.ToString('o')
+if ($previousStateSnapshot) {
+    $historyRoot = Join-Path $resolvedState 'state-history'
+    New-Item -ItemType Directory -Path $historyRoot -Force | Out-Null
+    $transactionLabel = if ($state.PSObject.Properties['transactionId']) { [string]$state.transactionId } else { 'legacy' }
+    $rolledBackStateArchive = Join-Path $historyRoot ("rolled-back.{0}.{1}.json" -f ([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')), $transactionLabel)
+    Write-CssTextAtomic -Path $rolledBackStateArchive -Text ($state | ConvertTo-Json -Depth 8)
+    $restoredState = Get-Content -LiteralPath $previousStateSnapshot -Raw | ConvertFrom-Json
+    $restoredState | Add-Member -NotePropertyName LastRestoredAtUtc -NotePropertyValue $rolledBackAt -Force
+    Write-CssTextAtomic -Path $statePath -Text ($restoredState | ConvertTo-Json -Depth 8)
+    Write-Output 'Previous installation state is active again; another rollback can continue the recorded chain.'
+}
+else {
+    $state | Add-Member -NotePropertyName RolledBackAtUtc -NotePropertyValue $rolledBackAt -Force
+    Write-CssTextAtomic -Path $statePath -Text ($state | ConvertTo-Json -Depth 8)
+}
 Write-Output 'Rollback complete. Restart Codex so the restored configuration becomes active.'
+

@@ -91,3 +91,4 @@ finally {
     }
     if (Test-Path -LiteralPath $temporaryIndex -PathType Leaf) { Remove-Item -LiteralPath $temporaryIndex -Force }
 }
+

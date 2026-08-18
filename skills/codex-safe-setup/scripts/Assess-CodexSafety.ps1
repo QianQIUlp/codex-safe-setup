@@ -48,6 +48,7 @@ $networkSectionText = Get-CssTomlSectionText -Text $configText -Section 'permiss
 $featuresSectionText = Get-CssTomlSectionText -Text $configText -Section 'features'
 $networkEnabled = $networkSectionText -match '(?m)^\s*enabled\s*=\s*true'
 $networkProxy = $featuresSectionText -match '(?m)^\s*network_proxy\s*=\s*true'
+$commandNetworkRoute = if (-not $networkEnabled) { 'Off' } elseif ($networkProxy) { 'ProxyFiltered' } else { 'DirectUnrestricted' }
 $windowsSandbox = $(if ($windowsMatch.Success) { $windowsMatch.Groups[1].Value } else { $null })
 $sandboxSetupHealth = Get-CssWindowsSandboxSetupHealth -CodexHome $resolvedHome -ExpectedProxyPort $(if ($networkProxy) { @(3128, 8081) } else { @() })
 
@@ -63,7 +64,7 @@ if ($userProfilePath) {
 $findings = [Collections.Generic.List[object]]::new()
 if ($fullAccess) { $findings.Add([pscustomobject]@{ Severity = 'HIGH'; Finding = 'Full Access removes the local sandbox boundary.' }) }
 if ($legacy.Present -and $profileMatch.Success) { $findings.Add([pscustomobject]@{ Severity = 'HIGH'; Finding = 'Legacy sandbox keys and permission profiles coexist; legacy settings can take precedence.' }) }
-if ($networkEnabled -and -not $networkProxy) { $findings.Add([pscustomobject]@{ Severity = 'HIGH'; Finding = 'Command network is enabled without the network proxy; domain rules are not enforced.' }) }
+if ($networkEnabled -and -not $networkProxy) { $findings.Add([pscustomobject]@{ Severity = 'HIGH'; Finding = 'Command network is direct and unrestricted; domain rules are not enforced. This is appropriate only when direct protocols are required and unrestricted-network risk was explicitly accepted.' }) }
 if (-not $managedProfile) { $findings.Add([pscustomobject]@{ Severity = 'MEDIUM'; Finding = 'No verified root-deny, workspace-only managed profile was detected.' }) }
 if (-not $codexCli.Present) { $findings.Add([pscustomobject]@{ Severity = 'INFO'; Finding = 'Codex CLI is absent, so rule and version checks will be partial.' }) }
 elseif (-not $codexVersionSupported) { $findings.Add([pscustomobject]@{ Severity = 'HIGH'; Finding = 'Detected Codex CLI does not prove support for permission profiles (minimum recognized version: 0.138.0).' }) }
@@ -88,6 +89,7 @@ $report = [pscustomobject]@{
     ApprovalReviewer = $(if ($reviewerMatch.Success) { $reviewerMatch.Groups[1].Value } else { $null })
     CommandNetworkEnabled = [bool]$networkEnabled
     NetworkProxyEnabled = [bool]$networkProxy
+    CommandNetworkRoute = $commandNetworkRoute
     WindowsSandbox = $windowsSandbox
     WindowsSandboxSetupHealth = $sandboxSetupHealth
     SensitiveLocationCount = $knownSensitiveLocations.Count
@@ -119,9 +121,10 @@ Write-Output ("Config: {0}" -f $resolvedConfig)
 Write-Output ("Full Access: {0}" -f $report.FullAccessDetected)
 Write-Output ("Permission profile: {0}" -f $(if ($report.PermissionProfile) { $report.PermissionProfile } else { '<not set>' }))
 Write-Output ("Approval: {0} / reviewer: {1}" -f $(if ($report.ApprovalPolicy) { $report.ApprovalPolicy } else { '<not set>' }), $(if ($report.ApprovalReviewer) { $report.ApprovalReviewer } else { '<not set>' }))
-Write-Output ("Command network: {0}; proxy: {1}" -f $report.CommandNetworkEnabled, $report.NetworkProxyEnabled)
+Write-Output ("Command network: {0}; proxy: {1}; route: {2}" -f $report.CommandNetworkEnabled, $report.NetworkProxyEnabled, $report.CommandNetworkRoute)
 Write-Output ("Windows sandbox setup: {0} - {1}" -f $sandboxSetupHealth.Status, $sandboxSetupHealth.Evidence)
 Write-Output ("PowerShell 7: {0}; Codex CLI: {1}; Git: {2}" -f $powershell7.Present, $codexCli.Present, $gitCli.Present)
 Write-Output ("Known sensitive locations present (contents not read): {0}" -f $knownSensitiveLocations.Count)
 foreach ($finding in $findings) { Write-Output ("[{0}] {1}" -f $finding.Severity, $finding.Finding) }
 Write-Output '[NOT CONTROLLED] Web Search, Browser, Computer Use, apps, plugins, MCP, and cloud tasks use separate controls.'
+

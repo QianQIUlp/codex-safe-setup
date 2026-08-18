@@ -1,4 +1,6 @@
 interface:
-  display_name: "Secure Codex Setup"
-  short_description: "Audit and harden local Codex permissions safely"
-  default_prompt: "Use $secure-codex-setup to audit my current Codex permissions and install a safer verified profile."
+  display_name: "Secure Codex Setup (legacy)"
+  short_description: "Compatibility alias for Codex Safe Setup"
+  default_prompt: "Use $codex-safe-setup to handle this existing Secure Codex Setup request."
+policy:
+  allow_implicit_invocation: false
