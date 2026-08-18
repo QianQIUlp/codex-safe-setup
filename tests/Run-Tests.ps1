@@ -154,7 +154,7 @@ unified_exec = true
     Assert-True ($directNetworkCheck.Count -eq 1 -and $directNetworkCheck[0].Status -eq 'PASS') 'Verifier must accept direct unrestricted networking only when the proxy and domain table are absent.'
     $directState = Get-Content -LiteralPath (Join-Path $directHome 'safe-setup\install-state.json') -Raw | ConvertFrom-Json
     Assert-True (@($directState.AllowedDomains).Count -eq 0) 'Unrestricted install state must not retain domain allow rules.'
-    Assert-True ($directState.schemaVersion -eq 2 -and $directState.productVersion -eq '0.1.2') 'New installs must record the current state schema and product version.'
+    Assert-True ($directState.schemaVersion -eq 3 -and $directState.productVersion -eq '0.1.3') 'New installs must record the current state schema and product version.'
 
     $upgradeHome = Join-Path $temporaryRoot 'upgrade-home'
     $upgradeStateRoot = Join-Path $upgradeHome 'safe-setup'
@@ -191,7 +191,7 @@ unified_exec = true
     Assert-True ($upgradedConfig -match '(?m)^network_proxy = false\r?$') 'Upgrade must disable the old wildcard filtering proxy for direct unrestricted networking.'
     Assert-True ($upgradedConfig -notmatch '(?m)^\s*"\*"\s*=\s*"allow"') 'Upgrade must remove the old wildcard domain rule.'
     $upgradedState = Get-Content -LiteralPath $legacyStatePath -Raw | ConvertFrom-Json
-    Assert-True ($upgradedState.schemaVersion -eq 2 -and $upgradedState.productVersion -eq '0.1.2' -and $upgradedState.operation -eq 'Upgrade') 'Upgrade must write schema-versioned state.'
+    Assert-True ($upgradedState.schemaVersion -eq 3 -and $upgradedState.productVersion -eq '0.1.3' -and $upgradedState.operation -eq 'Upgrade') 'Upgrade must write schema-versioned state.'
     Assert-True ($upgradedState.previousStateSnapshot -and (Test-Path -LiteralPath $upgradedState.previousStateSnapshot -PathType Leaf)) 'Upgrade must retain an immutable previous-state snapshot.'
     Assert-True ([IO.Path]::GetFullPath($upgradedState.ConfigBackup).StartsWith([IO.Path]::GetFullPath((Join-Path $upgradeStateRoot 'backups')), [StringComparison]::OrdinalIgnoreCase)) 'Upgrade backup must stay under the transaction backup root.'
 
@@ -209,12 +209,19 @@ unified_exec = true
     Invoke-GitTest -Repository $repository -GitArguments @('add', 'tracked.txt') | Out-Null
     Invoke-GitTest -Repository $repository -GitArguments @('commit', '-m', 'initial') | Out-Null
 
-    $installResult = @(& $installScript -ApprovalMode AskMe -NetworkMode Allowlist -AllowedDomain 'example.com' -WindowsSandbox Keep -WorkspacePath $repository -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -MigrateLegacySettings -ConfirmApply -NonInteractive)
+    $primaryRepository = $repository
+    $primaryHeadBefore = (Invoke-GitTest -Repository $primaryRepository -GitArguments @('rev-parse', 'HEAD') | Select-Object -First 1).Trim()
+    $repository = Join-Path $temporaryRoot 'linked-worktree'
+    Invoke-GitTest -Repository $primaryRepository -GitArguments @('worktree', 'add', '-b', 'codex/bridge-test', $repository) | Out-Null
+    $commonGitDirectory = (Invoke-GitTest -Repository $repository -GitArguments @('rev-parse', '--git-common-dir') | Select-Object -First 1).Trim()
+    Assert-True ($commonGitDirectory -match '[\\/]\.git$') 'Linked-worktree test must use the primary repository shared Git directory.'
+    $installResult = @(& $installScript -ApprovalMode AskMe -NetworkMode Allowlist -AllowedDomain 'example.com' -WindowsSandbox Keep -WorkspacePath $repository -EnableGitCommitBridge $true -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -MigrateLegacySettings -ConfirmApply -NonInteractive)
     $installSummary = @($installResult | Where-Object { $_.PSObject.Properties['Status'] } | Select-Object -Last 1)
     Assert-True ($installSummary.Count -eq 1) 'Installer must return a structured completion summary.'
     Assert-True ($installSummary[0].RequiredPermissionSelection -match 'choose Custom') 'Completion summary must direct the user to Custom permissions.'
     Assert-True ($installSummary[0].RequiredPermissionSelection -match 'codex-safe-workspace') 'Completion summary must name the custom profile.'
     Assert-True ($installSummary[0].RequiredPermissionSelection -match 'Do not choose Full Access') 'Completion summary must distinguish Custom from Full Access.'
+    Assert-True $installSummary[0].GitCommitBridgeEnabled 'Completion summary must report the explicit linked-worktree commit capability.'
     if ($env:OS -eq 'Windows_NT') {
         Assert-True ($installSummary[0].RequiredRestart -match 'Restart Codex and start a new task') 'Windows activation must require a restart and fresh task.'
         Assert-True ($installSummary[0].RequiredRestart -match 'fully quit every Codex desktop window and CLI process') 'Repeated prompts must escalate to a complete process shutdown.'
@@ -253,6 +260,7 @@ unified_exec = true
     $installState = Get-Content -LiteralPath (Join-Path $stateRoot 'install-state.json') -Raw | ConvertFrom-Json
     Assert-True (@($installState.AllowedDomains).Count -eq 1 -and $installState.AllowedDomains[0] -eq 'example.com') 'Allowlist install state must record its explicit domain rule.'
     $installedCheckpointScript = $installState.BridgePath
+    Assert-True $installState.EnableGitCommitBridge 'Install state must preserve the explicit Git commit bridge choice.'
 
     [IO.File]::WriteAllText((Join-Path $repository 'tracked.txt'), 'changed after checkpoint', [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $repository 'ordinary-untracked.txt'), 'untracked', [Text.UTF8Encoding]::new($false))
@@ -266,6 +274,17 @@ unified_exec = true
     Assert-True ($indexBefore -eq $indexAfter) 'Checkpoint must not change the real index.'
     $checkpointContent = (Invoke-GitTest -Repository $repository -GitArguments @('show', "$($checkpoint.Commit):tracked.txt") | Select-Object -First 1).Trim()
     Assert-True ($checkpointContent -eq 'changed after checkpoint') 'Checkpoint commit must contain the working-tree version.'
+    [IO.File]::WriteAllText((Join-Path $repository 'not-selected.txt'), 'leave me uncommitted', [Text.UTF8Encoding]::new($false))
+    $bridgeStatus = & $installedCheckpointScript -Action Status -Repository $repository
+    Assert-True ($bridgeStatus.Status -eq 'CHANGED') 'Status bridge must inspect the registered worktree outside protected Git metadata.'
+    $normalCommit = & $installedCheckpointScript -Action Commit -Repository $repository -Message 'test scoped worktree commit' -Path @('tracked.txt', 'ordinary-untracked.txt')
+    Assert-True ($normalCommit.Status -eq 'COMMITTED' -and $normalCommit.Branch -eq 'codex/bridge-test') 'Commit bridge must commit explicit paths on the authorized Codex branch.'
+    $selectedStatus = @(Invoke-GitTest -Repository $repository -GitArguments @('status', '--short', '--', 'tracked.txt', 'ordinary-untracked.txt'))
+    Assert-True ($selectedStatus.Count -eq 0) 'Committed paths must be clean in the linked worktree real index.'
+    $remainingStatus = @(Invoke-GitTest -Repository $repository -GitArguments @('status', '--short', '--', 'not-selected.txt'))
+    Assert-True ($remainingStatus.Count -eq 1 -and $remainingStatus[0] -match '^\?\?') 'Commit bridge must leave unselected changes untouched.'
+    $primaryHeadAfter = (Invoke-GitTest -Repository $primaryRepository -GitArguments @('rev-parse', 'HEAD') | Select-Object -First 1).Trim()
+    Assert-True ($primaryHeadAfter -eq $primaryHeadBefore) 'Linked-worktree commit must update only its own branch.'
 
     [IO.File]::WriteAllText((Join-Path $repository '.env'), 'SYNTHETIC_ONLY=not-a-secret', [Text.UTF8Encoding]::new($false))
     $refusedSensitive = $false
@@ -320,7 +339,7 @@ unified_exec = true
     if ($env:OS -eq 'Windows_NT') { Write-Output 'PASS: elevated sandbox proxy-port oscillation diagnostics' }
     Write-Output 'PASS: least-privilege and allowlist generation'
     Write-Output 'PASS: static and execpolicy verification'
-    Write-Output 'PASS: branch/index-neutral Git checkpoint'
+    Write-Output 'PASS: branch/index-neutral checkpoint and scoped linked-worktree commit'
     Write-Output 'PASS: sensitive-file, registry-override, Git-pin, and unauthorized-repository refusals'
     Write-Output 'PASS: rollback target-lock validation'
     Write-Output 'PASS: versioned upgrade migration and chained rollback'

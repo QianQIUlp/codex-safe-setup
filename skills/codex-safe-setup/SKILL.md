@@ -37,6 +37,8 @@ If `CODEX_HOME/safe-setup/install-state.json` exists, do not rerun the first-ins
 
 For a 0.1.1-or-earlier `Unrestricted` installation, explain that the old wildcard proxy representation did not provide native direct networking. The 0.1.2 migration disables the filtering proxy, removes the wildcard domain table, records state schema 2, and requires a full Codex restart plus a fresh task. Never claim the plugin update alone activated this migration.
 
+For 0.1.2 installations, version 0.1.3 records state schema 3 and upgrades the registered-workspace bridge without making shared Git metadata writable. Preserve the prior Git commit-bridge choice. Enabling normal branch commits is a separate capability choice: preview it first and require the user to explicitly select it for an exact registered worktree.
+
 ### 2. Explain the choices before asking
 
 Lead with: **Do not treat approval as safety. Limit what the agent can change, read, and send.**
@@ -79,6 +81,10 @@ Choose Windows `Elevated` when the user accepts its administrator-approved setup
 Run `Install-CodexSafety.ps1` with `-PlanOnly`. Include `-MigrateLegacySettings` only after explaining that the installer will replace conflicting legacy sandbox keys while retaining a full backup.
 
 Show the configuration path, managed keys, chosen boundaries, checkpoint registration, backup location, rollback command, and controls that remain outside this skill.
+
+For a linked Git worktree, keep the parent repository's shared `.git` protected. If the user needs normal commits, offer `-EnableGitCommitBridge $true` only after explaining that the bridge will update the real index and current branch for explicit paths. The default branch prefix is `codex/`; use `-CommitBranchPrefix` only when the user explicitly chooses another prefix. Do not replace this with a broad filesystem write exception for the parent `.git`.
+
+Use bridge `Status` when direct `git status` reports surprising tracked deletions. A difference means the sandbox profile or host ACL is hiding files from the direct Git process; it is not evidence that the project deleted them. Credential-style tracked fixtures such as public test certificates still require exact, reviewed read exceptions; never disable the workspace secret globs wholesale.
 
 ### 5. Apply or upgrade only after confirmation
 
@@ -130,4 +136,4 @@ Run `Rollback-CodexSafety.ps1` without confirmation first so it shows the target
 
 Allow only the installed `New-CodexCheckpoint.ps1` bridge through the exact PowerShell 7 executable and exact script path. Never allow a general `pwsh`, `powershell`, `git`, shell-wrapper, or arbitrary-script prefix.
 
-The bridge must accept only registered repositories, refuse sensitive-looking untracked files, create a hidden Git commit and dedicated ref without changing the branch or index, expose save/list only, and leave restoration user-controlled.
+The bridge must accept only registered repositories and a pinned Git executable. `Save` creates a hidden checkpoint without changing the branch or real index; `Status` reports the repository state outside protected metadata. `Commit` is opt-in, accepts explicit literal paths only, requires an allowed branch prefix and an initially clean index, refuses in-progress Git operations and repository-local clean/process filters, suppresses hooks and signing, and leaves unselected changes untouched. Never use it as a general Git or shell escape.

@@ -2,6 +2,15 @@
 
 All notable changes are documented here. Releases follow semantic versioning.
 
+## 0.1.3 - 2026-08-18
+
+- Fix linked-worktree Git workflows without granting raw write access to the parent repository's shared `.git`.
+- Add bridge `Status` so real Git state can be compared with sandbox/ACL visibility artifacts instead of treating inaccessible tracked files as deletions.
+- Add an explicit opt-in `Commit` action for registered worktrees. It accepts literal paths only, defaults to `codex/` branches, requires a clean index and no in-progress Git operation, suppresses hooks/signing, refuses repository-local clean/process filters, verifies the staged path set, and preserves unselected changes.
+- Upgrade install state to schema 3 and registry schema 2 while preserving prior choices and rollback generations. Existing installations keep normal commits disabled until the user explicitly enables them.
+- Add guarded automatic release tagging when an aligned manifest and marketplace version reaches `main`; the existing tag workflow still validates, packages, checksums, and publishes the release.
+- Add isolated linked-worktree coverage for shared Git metadata, exact-path commits, branch isolation, and untouched unselected changes.
+
 ## 0.1.2 - 2026-08-18
 
 - Fix `Unrestricted` command networking to use direct networking with the filtering proxy disabled, so native protocols such as OpenSSH are not trapped behind the offline sandbox account's proxy route.
@@ -17,7 +26,7 @@ All notable changes are documented here. Releases follow semantic versioning.
 
 - Explain the concrete consequences of unrestricted command networking before acknowledgement: destination-unbounded exfiltration, prompt injection, unsafe downloads, and license risk.
 - Clarify that command networking does not itself widen filesystem or deletion authority, while existing workspace write/delete capability remains.
-- Require the completion handoff to select `Custom` / `自定义`, confirm `codex-safe-workspace`, and start a new task or session.
+- Require the completion handoff to select `Custom` / `???`, confirm `codex-safe-workspace`, and start a new task or session.
 - Move new marketplace installs to a `main`-tracked catalog so subsequent released versions can be discovered, with a one-time migration path for `v0.1.0` users.
 - Add regression coverage for the risk disclosure, acknowledgement guard, and activation handoff.
 - Diagnose repeated Windows elevated-sandbox administrator prompts by reporting proxy-port setup conflicts while treating recovered, aligned history as informational.

@@ -1,6 +1,6 @@
 # Codex Safe Setup
 
-[简体中文](README.zh-CN.md) · [Threat model](docs/threat-model.md) · [How it works](docs/how-it-works.md) · [Contributing](CONTRIBUTING.md)
+[????](README.zh-CN.md) � [Threat model](docs/threat-model.md) � [How it works](docs/how-it-works.md) � [Contributing](CONTRIBUTING.md)
 
 [![CI](https://github.com/QianQIUlp/codex-safe-setup/actions/workflows/ci.yml/badge.svg)](https://github.com/QianQIUlp/codex-safe-setup/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/QianQIUlp/codex-safe-setup)](https://github.com/QianQIUlp/codex-safe-setup/releases)
@@ -10,7 +10,7 @@
 
 Codex Safe Setup is a community-built Codex plugin for installing a least-privilege, recoverable local configuration. It begins with a read-only audit, explains the actual tradeoffs, asks before every consequential choice, writes a backed-up configuration only after confirmation, and verifies the result.
 
-The project exists because “I will review every command” and “another AI will review every command” are both fallible strategies. Full Access can also expose credentials and private files to an agent run even when no destructive command is executed. Hard capability boundaries reduce the impact of mistakes; approval remains a workflow choice inside and around those boundaries.
+The project exists because "I will review every command" and "another AI will review every command" are both fallible strategies. Full Access can also expose credentials and private files to an agent run even when no destructive command is executed. Hard capability boundaries reduce the impact of mistakes; approval remains a workflow choice inside and around those boundaries.
 
 This project is not an absolute-safety guarantee and is not an official OpenAI project. It is distributed through a third-party GitHub marketplace; it has not been submitted to or listed in OpenAI's universal public plugin directory.
 
@@ -50,6 +50,8 @@ The upgrade first shows the prior and requested approval, network, Windows sandb
 
 Version 0.1.2 requires this configuration migration for 0.1.1 `Unrestricted` users because the old wildcard proxy representation did not provide native direct networking. The migration disables the filtering proxy and removes the wildcard domain table. The same unrestricted-network risk acknowledgement and Windows administrator-setup acknowledgement remain required when those preserved choices apply.
 
+Version 0.1.3 adds linked-worktree-safe status and opt-in normal commits without making the parent repository's shared `.git` writable. After refreshing the plugin, preview the configuration upgrade. Commit support remains disabled unless you explicitly register the worktree with `-EnableGitCommitBridge $true`; it stages only named paths on allowed branch prefixes (default `codex/`) and leaves unselected changes alone.
+
 If you manually copied the old standalone `~/.codex/skills/secure-codex-setup` folder instead of installing the marketplace plugin, move that folder to a recoverable backup outside skill discovery, add the GitHub marketplace, install `codex-safe-setup`, and start a new task. Keeping the standalone copy discoverable would expose two independently versioned skills.
 
 If you installed `v0.1.0` using the old version-pinned marketplace command, switch that marketplace to the updateable channel once:
@@ -86,7 +88,7 @@ On Windows, the setup separately asks whether to install PowerShell 7 and Codex 
 - Denies common credential-bearing files such as `.env`, private keys, npm credentials, and cloud credential files inside the workspace.
 - Explicitly selects offline, proxy-enforced allowlist, or direct unrestricted command networking.
 - Preserves Codex protections for `.git`, `.codex`, and `.agents`.
-- Optionally installs a narrow, pinned Git checkpoint bridge that can save or list recovery checkpoints without changing the current branch, real index, or working tree.
+- Optionally installs a narrow, pinned Git bridge that can inspect true status and save branch/index-neutral checkpoints; separately authorized linked worktrees can commit explicit paths on allowed Codex branches without broad `.git` write access.
 - Backs up every managed file and provides an exact rollback command.
 
 The installer refuses to mix modern permission profiles silently with legacy sandbox settings. Migration requires explicit consent and a backup is taken first. Existing installations must use the dedicated upgrade path so active state is never silently overwritten.
@@ -114,7 +116,7 @@ The preferred Windows `Elevated` sandbox uses administrator-approved OS setup; i
 
 Schema-versioned install state keeps transaction-scoped backups and immutable previous-state snapshots. A rollback after an upgrade restores both the prior managed files and the prior active state, allowing the rollback chain to continue one generation at a time.
 
-The optional checkpoint bridge snapshots tracked and ordinary untracked files to hidden refs under `refs/codex-safe/checkpoints/*`. It refuses sensitive-looking untracked files and never performs automatic `reset --hard`, `clean`, branch replacement, or in-place checkout. See [How it works](docs/how-it-works.md).
+The optional bridge snapshots tracked and ordinary untracked files to hidden refs under `refs/codex-safe/checkpoints/*`. Its `Status` action distinguishes real repository state from sandbox/ACL visibility artifacts. Opt-in `Commit` requires explicit paths, an allowed branch prefix, a clean starting index, and no in-progress Git operation; it suppresses hooks/signing and leaves unselected changes untouched. The bridge refuses sensitive-looking untracked files and never performs automatic `reset --hard`, `clean`, branch replacement, or in-place checkout. See [How it works](docs/how-it-works.md).
 
 ## Develop and test
 

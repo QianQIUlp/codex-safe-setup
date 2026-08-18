@@ -59,17 +59,14 @@ Runtime checks are route-specific and require a new task: `Off` proves a reachab
 
 The workspace sandbox intentionally protects `.git`. The optional bridge is copied to `CODEX_HOME/safe-setup/bin` and is the only PowerShell script allowed by the generated command rule. The rule matches the exact PowerShell 7 executable and exact bridge path; it does not allow a general `pwsh`, `powershell`, `git`, shell wrapper, or arbitrary script.
 
-For `Save`, the bridge:
+Every action resolves a canonical worktree root, checks `authorized-workspaces.json`, and verifies the pinned Git executable hash. This works for linked worktrees without granting the sandbox raw access to their parent repository's shared `.git`.
 
-1. Resolves the requested repository to a canonical path.
-2. Confirms it is present in `authorized-workspaces.json`.
-3. Confirms the configured Git executable still has its pinned SHA-256.
-4. Refuses sensitive-looking untracked paths.
-5. Uses a temporary Git index to build a tree and commit.
-6. Stores the commit under `refs/codex-safe/checkpoints/*`.
-7. Removes the temporary index.
+- `Save` refuses sensitive-looking untracked paths, builds a temporary index, and stores a hidden checkpoint under `refs/codex-safe/checkpoints/*`. The current branch, real index, and working tree remain unchanged.
+- `List` enumerates checkpoint refs.
+- `Status` reports actual Git state outside the protected metadata boundary, which exposes discrepancies caused by sandbox or host ACL visibility.
+- `Commit` is opt-in per registered worktree. It accepts explicit literal paths only, requires a configured branch prefix (default `codex/`), a clean starting index, and no in-progress Git operation. It suppresses repository hooks and commit signing, refuses local clean/process filters, confirms the exact staged path set, commits it, and leaves every unselected change untouched.
 
-The current branch, `HEAD`, real index, and working tree are unchanged. The bridge exposes only `Save` and `List`. Recovery stays user-controlled and should normally use a separate worktree:
+The bridge is not a general Git escape. Recovery from `Save` remains user-controlled and should normally use a separate worktree:
 
 ```powershell
 git worktree add <new-empty-directory> <checkpoint-commit>
@@ -82,9 +79,9 @@ Exact locations depend on `CODEX_HOME`, which defaults to the normal Codex user 
 | Target | Purpose |
 |---|---|
 | `config.toml` | Active permission, approval, sandbox, and network selections |
-| `rules/codex-safe-setup.rules` | Exact checkpoint command rule |
+| `rules/codex-safe-setup.rules` | Exact status/checkpoint/opt-in commit bridge rule |
 | `safe-setup/bin/New-CodexCheckpoint.ps1` | Installed narrow checkpoint bridge |
-| `safe-setup/authorized-workspaces.json` | Canonical workspace roots and pinned Git |
+| `safe-setup/authorized-workspaces.json` | Canonical roots, commit-enabled roots, allowed branch prefixes, and pinned Git |
 | `safe-setup/backups/<transaction>/*` | Restore material isolated by install or upgrade transaction |
 | `safe-setup/state-history/*` | Immutable prior-state snapshots and rolled-back state records |
 | `safe-setup/outside-workspace-canary.txt` | Synthetic target for boundary testing |

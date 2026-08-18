@@ -44,7 +44,7 @@ foreach ($file in $requiredFiles) {
 $manifestText = [IO.File]::ReadAllText($manifestPath)
 $manifest = $manifestText | ConvertFrom-Json
 Assert-True ($manifest.name -eq 'codex-safe-setup') 'Plugin name must remain codex-safe-setup.'
-Assert-True ($manifest.version -eq '0.1.2') 'Release package must use version 0.1.2.'
+Assert-True ($manifest.version -eq '0.1.3') 'Release package must use version 0.1.3.'
 Assert-True ($manifest.version -match '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$') 'Plugin version must be strict semver.'
 Assert-True (-not [string]::IsNullOrWhiteSpace($manifest.description)) 'Plugin description is required.'
 Assert-True (-not [string]::IsNullOrWhiteSpace($manifest.author.name)) 'Plugin author name is required.'
@@ -84,6 +84,10 @@ Assert-True ($skillText -match 'choose `Custom`') 'Skill must require the Custom
 Assert-True ($skillText -match '`codex-safe-workspace` is the selected profile') 'Skill must name the profile the user should activate.'
 Assert-True ($skillText -match 'fully quit every Codex desktop window and CLI process') 'Skill must require a complete Windows process shutdown after installation.'
 Assert-True ($skillText -match 'Repeated administrator prompts are a failure signal') 'Skill must treat repeated elevation prompts as a diagnosable failure.'
+Assert-True ($skillText -match 'EnableGitCommitBridge') 'Skill must explain the explicit linked-worktree commit capability.'
+Assert-True ($skillText -match 'bridge `Status`') 'Skill must route surprising Git deletions through the status bridge.'
+Assert-True ($skillText -match '`Commit` is opt-in') 'Skill must keep real branch commits opt-in.'
+Assert-True ($skillText -match 'Do not replace this with a broad filesystem write exception') 'Skill must preserve shared Git metadata protection.'
 
 $openAiYaml = [IO.File]::ReadAllText($openAiYamlPath)
 Assert-True ($openAiYaml -match '(?m)^\s*display_name:\s*"[^"]+"\s*$') 'openai.yaml display_name is required and must be quoted.'

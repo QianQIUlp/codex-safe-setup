@@ -7,6 +7,8 @@ param(
     [bool]$ProtectWorkspaceSecrets = $true,
     [bool]$AllowTempWrite = $false,
     [string]$WorkspacePath,
+    [bool]$EnableGitCommitBridge = $false,
+    [string[]]$CommitBranchPrefix = @('codex/'),
     [string]$CodexHome,
     [string]$ConfigPath,
     [string]$StateRoot,
@@ -98,6 +100,17 @@ foreach ($domain in $AllowedDomain) {
     }
 }
 
+if ($EnableGitCommitBridge -and -not $WorkspacePath) {
+    throw '-EnableGitCommitBridge requires -WorkspacePath so the exact worktree can be registered.'
+}
+if ($CommitBranchPrefix.Count -eq 0) {
+    throw 'At least one literal -CommitBranchPrefix is required.'
+}
+foreach ($prefix in $CommitBranchPrefix) {
+    if ([string]::IsNullOrWhiteSpace($prefix) -or $prefix -notmatch '^[A-Za-z0-9][A-Za-z0-9._/-]*/$' -or $prefix.Contains('..') -or $prefix.Contains('//')) {
+        throw "Invalid commit branch prefix '$prefix'. Use a literal prefix ending in '/', for example codex/."
+    }
+}
 $unrestrictedRiskSummary = @(
     'This network choice does not expand filesystem permissions or add deletion authority; existing workspace write and delete capability still applies.'
     'The command proxy and its destination filter are disabled so ordinary direct-network protocols, including SSH, can work. Any data a command can already read or generate could be sent to any public Internet destination, including source, configuration, private data, command output, or credentials missed by filename deny rules.'
@@ -207,6 +220,8 @@ $plan = [pscustomobject]@{
     MigrateLegacySettings = [bool]$MigrateLegacySettings
     RegisteredWorkspace = $recordedWorkspace
     CheckpointBridge = $(if ($resolvedWorkspace) { 'Install when PowerShell 7 is available' } else { 'Not requested' })
+    GitCommitBridge = $(if ($EnableGitCommitBridge) { "Enabled only for explicit paths on branches matching: $($CommitBranchPrefix -join ', ')" } else { 'Disabled' })
+    SharedGitMetadata = 'Remains protected from direct sandbox writes; linked-worktree commits use the constrained bridge.'
     ExternalSurfaces = 'Web Search, Browser, Computer Use, apps, plugins, MCP, and cloud tasks are not controlled.'
 }
 
@@ -286,17 +301,30 @@ try {
 
     if ($resolvedWorkspace) {
         $authorizedRoots = @()
+        $commitRoots = @()
         if (Test-Path -LiteralPath $authorizedPath -PathType Leaf) {
-            try { $authorizedRoots = @((Get-Content -LiteralPath $authorizedPath -Raw | ConvertFrom-Json).roots) } catch { $authorizedRoots = @() }
+            try {
+                $existingRegistry = Get-Content -LiteralPath $authorizedPath -Raw | ConvertFrom-Json
+                $authorizedRoots = @($existingRegistry.roots)
+                if ($existingRegistry.PSObject.Properties['commitRoots']) { $commitRoots = @($existingRegistry.commitRoots) }
+            }
+            catch {
+                $authorizedRoots = @()
+                $commitRoots = @()
+            }
         }
         $authorizedRoots = @($authorizedRoots + $resolvedWorkspace | Where-Object { $_ } | Sort-Object -Unique)
+        $commitRoots = @($commitRoots | Where-Object { -not [string]::Equals([IO.Path]::GetFullPath($_), $resolvedWorkspace, $pathComparison) })
+        if ($EnableGitCommitBridge) { $commitRoots = @($commitRoots + $resolvedWorkspace | Sort-Object -Unique) }
         $bridgeRegistry = [pscustomobject]@{
-            schemaVersion = 1
+            schemaVersion = 2
             gitExecutable = $gitExecutableForBridge
             gitExecutableSha256 = $gitExecutableHash
             roots = $authorizedRoots
+            commitRoots = $commitRoots
+            commitBranchPrefixes = @($CommitBranchPrefix | Sort-Object -Unique)
         }
-        Write-CssTextAtomic -Path $authorizedPath -Text ($bridgeRegistry | ConvertTo-Json -Depth 3)
+        Write-CssTextAtomic -Path $authorizedPath -Text ($bridgeRegistry | ConvertTo-Json -Depth 4)
 
         $pwshCommand = Get-Command pwsh -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($pwshCommand) {
@@ -310,15 +338,19 @@ try {
             $saveExample = ConvertTo-CssStarlarkString -Value ('"{0}" -NoProfile -NonInteractive -File "{1}" -Action Save -Repository "{2}"' -f $pwshRulePath, $scriptRulePath, $workspaceRulePath)
             $listExample = ConvertTo-CssStarlarkString -Value ('"{0}" -NoProfile -NonInteractive -File "{1}" -Action List -Repository "{2}"' -f $pwshRulePath, $scriptRulePath, $workspaceRulePath)
             $unsafeExample = ConvertTo-CssStarlarkString -Value ('"{0}" -NoProfile -File "{1}" -Action Save -Repository "{2}"' -f $pwshRulePath, $scriptRulePath, $workspaceRulePath)
+            $statusExample = ConvertTo-CssStarlarkString -Value ('"{0}" -NoProfile -NonInteractive -File "{1}" -Action Status -Repository "{2}"' -f $pwshRulePath, $scriptRulePath, $workspaceRulePath)
+            $commitExample = ConvertTo-CssStarlarkString -Value ('"{0}" -NoProfile -NonInteractive -File "{1}" -Action Commit -Repository "{2}" -Message "Scoped commit" -Path "README.md"' -f $pwshRulePath, $scriptRulePath, $workspaceRulePath)
             $ruleText = @"
 # Generated by Codex Safe Setup. Exact bridge only; never general PowerShell or Git.
 prefix_rule(
-    pattern = [$pwshLiteral, "-NoProfile", "-NonInteractive", "-File", $scriptLiteral, "-Action", ["Save", "List"]],
+    pattern = [$pwshLiteral, "-NoProfile", "-NonInteractive", "-File", $scriptLiteral, "-Action", ["Save", "List", "Status", "Commit"]],
     decision = "allow",
-    justification = "Create or list a checkpoint only in a user-registered repository",
+    justification = "Inspect, checkpoint, or explicitly commit selected paths in a registered repository",
     match = [
         $saveExample,
         $listExample,
+        $statusExample,
+        $commitExample,
     ],
     not_match = [
         $unsafeExample,
@@ -364,6 +396,8 @@ prefix_rule(
         ProtectWorkspaceSecrets = $ProtectWorkspaceSecrets
         AllowTempWrite = $AllowTempWrite
         MigrateLegacySettings = [bool]$MigrateLegacySettings
+        EnableGitCommitBridge = $EnableGitCommitBridge
+        CommitBranchPrefixes = @($CommitBranchPrefix | Sort-Object -Unique)
         WindowsSandbox = $WindowsSandbox
         RegisteredWorkspace = $recordedWorkspace
     }
@@ -400,6 +434,7 @@ catch {
     BackupPath = $(if ($originalConfigExists) { $configBackup } else { '<new config; rollback removes it>' })
     CheckpointBridgeInstalled = $bridgeInstalled
     RuleInstalled = $ruleInstalled
+    GitCommitBridgeEnabled = $EnableGitCommitBridge
     Verification = $(if (Get-Command codex -ErrorAction SilentlyContinue) { 'Run Test-CodexSafety.ps1 after restarting Codex.' } else { 'PARTIAL: install Codex CLI for rule verification.' })
     RequiredPermissionSelection = 'Open the Codex permission selector, choose Custom, and confirm codex-safe-workspace is selected. Do not choose Full Access.'
     RequiredRestart = $(if ($env:OS -eq 'Windows_NT') { 'Restart Codex and start a new task; do not resume a pre-install task because its proxy and sandbox state cannot be updated retroactively. If administrator prompts repeat, fully quit every Codex desktop window and CLI process, then relaunch once.' } else { 'Start a new Codex task or CLI session; the current execution environment does not retroactively adopt the new profile.' })

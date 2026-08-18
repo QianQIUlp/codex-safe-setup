@@ -1,7 +1,7 @@
 Set-StrictMode -Version Latest
 
-$script:CssStateSchemaVersion = 2
-$script:CssProductVersion = '0.1.2'
+$script:CssStateSchemaVersion = 3
+$script:CssProductVersion = '0.1.3'
 $script:CssManagedStart = '# >>> codex-safe-setup managed >>>'
 $script:CssManagedEnd = '# <<< codex-safe-setup managed <<<'
 $script:CssProfileName = 'codex-safe-workspace'

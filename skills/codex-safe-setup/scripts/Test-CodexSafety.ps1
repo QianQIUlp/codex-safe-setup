@@ -93,6 +93,23 @@ if ($state) {
         $bridgeOkay = Test-Path -LiteralPath $state.BridgePath -PathType Leaf
         $rulesOkay = Test-Path -LiteralPath $state.RulesPath -PathType Leaf
         $checks.Add((New-CssCheck -Status $(if ($bridgeOkay -and $rulesOkay) { 'PASS' } else { 'FAIL' }) -Control 'Checkpoint bridge' -Evidence 'Exact bridge and rules files exist outside workspace'))
+        $registryOkay = $false
+        if ($state.AuthorizedWorkspacesPath -and (Test-Path -LiteralPath $state.AuthorizedWorkspacesPath -PathType Leaf)) {
+            try {
+                $registry = Get-Content -LiteralPath $state.AuthorizedWorkspacesPath -Raw | ConvertFrom-Json
+                $registeredRoot = [IO.Path]::GetFullPath([string]$state.RegisteredWorkspace)
+                $comparison = if ($env:OS -eq 'Windows_NT') { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+                $rootRegistered = @($registry.roots | Where-Object { [string]::Equals([IO.Path]::GetFullPath($_), $registeredRoot, $comparison) }).Count -eq 1
+                $commitRegistered = @($registry.commitRoots | Where-Object { [string]::Equals([IO.Path]::GetFullPath($_), $registeredRoot, $comparison) }).Count -eq 1
+                $commitExpected = $state.PSObject.Properties['EnableGitCommitBridge'] -and [bool]$state.EnableGitCommitBridge
+                $prefixesMatch = (@($registry.commitBranchPrefixes | Sort-Object -Unique) -join "`n") -eq (@($state.CommitBranchPrefixes | Sort-Object -Unique) -join "`n")
+                $registryOkay = $registry.schemaVersion -eq 2 -and $rootRegistered -and ($commitRegistered -eq $commitExpected) -and $prefixesMatch
+            }
+            catch {
+                $registryOkay = $false
+            }
+        }
+        $checks.Add((New-CssCheck -Status $(if ($registryOkay) { 'PASS' } else { 'FAIL' }) -Control 'Git bridge authorization' -Evidence 'Registry schema, canonical root, commit opt-in, and branch prefixes match install state'))
         if (-not $SkipCliRuleCheck) {
             $codexCommand = Get-Command codex -ErrorAction SilentlyContinue | Select-Object -First 1
             if (-not $codexCommand) {
