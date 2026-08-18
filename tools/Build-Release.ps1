@@ -62,8 +62,14 @@ try {
         if ($entryNames -notcontains '.codex-plugin/plugin.json') {
             throw 'Built archive is missing .codex-plugin/plugin.json.'
         }
+        if ($entryNames -notcontains 'skills/codex-safe-setup/SKILL.md') {
+            throw 'Built archive is missing the codex-safe-setup skill.'
+        }
         if ($entryNames -notcontains 'skills/secure-codex-setup/SKILL.md') {
-            throw 'Built archive is missing the secure-codex-setup skill.'
+            throw 'Built archive is missing the one-release compatibility alias.'
+        }
+        if ($entryNames -notcontains 'skills/codex-safe-setup/scripts/Upgrade-CodexSafety.ps1') {
+            throw 'Built archive is missing the versioned upgrade entry point.'
         }
     }
     finally {

@@ -11,3 +11,10 @@ Authorized canonical roots and the installer-pinned Git executable live in `CODE
 Inspect a checkpoint with `git show --stat <commit>`. Recover without overwriting the current tree by creating a separate worktree after confirmation: `git worktree add <new-empty-directory> <commit>`.
 
 Never automatically run `reset --hard`, `clean`, branch replacement, or in-place checkout.
+
+
+## Versioned install state
+
+Version 0.1.2 stores schema-versioned active state, transaction-scoped backups, and immutable prior-state snapshots under `CODEX_HOME/safe-setup/state-history`. A configuration upgrade never deletes the prior state. One rollback restores both the prior managed files and its active state, so a second rollback can continue to the preceding installation.
+
+Plugin cache state and already-running Codex task state are not part of this chain. Refresh the plugin first, run the configuration upgrade explicitly, then restart Codex and use a new task.

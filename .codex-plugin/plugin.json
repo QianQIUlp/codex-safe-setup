@@ -1,6 +1,6 @@
 {
   "name": "codex-safe-setup",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Audit and install a least-privilege, recoverable local Codex configuration.",
   "author": {
     "name": "QianQIUlp and Codex Safe Setup Contributors",

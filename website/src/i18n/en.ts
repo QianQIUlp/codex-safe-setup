@@ -344,14 +344,14 @@ export const en: UiContent = {
     lead: 'Two commands, one prompt — then the skill audits, explains the tradeoffs, and writes configuration only after you confirm.',
     requires: 'Requires Codex CLI 0.138.0 or newer · PowerShell 7 recommended on Windows',
     commands: [
-      'codex plugin marketplace add QianQIUlp/codex-safe-setup --ref v0.1.0',
+      'codex plugin marketplace add QianQIUlp/codex-safe-setup --ref main',
       'codex plugin add codex-safe-setup@codex-safe-setup',
     ],
     promptLabel: 'Start a new Codex task or CLI session, then ask:',
     promptText:
-      'Use $secure-codex-setup to audit my current permissions and install the recommended profile.',
+      'Use $codex-safe-setup to audit my current permissions and install the recommended profile.',
     releaseNote:
-      'The marketplace method is preferred because Codex can track the plugin source and version.',
+      'The GitHub marketplace follows main, whose catalog pins the latest release. Refresh the marketplace and reinstall the plugin bundle to update.',
     shaNote:
       'Each release also ships an install-ready ZIP with a .sha256 file. Verify the archive in PowerShell with Get-FileHash -Algorithm SHA256 <archive>.',
     detailsCta: {

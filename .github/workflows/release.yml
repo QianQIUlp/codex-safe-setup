@@ -1,10 +1,12 @@
 name: Release
 
 on:
+  push:
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag, for example v0.1.0
+        description: Existing release tag, for example v0.1.2
         required: true
         type: string
 
@@ -20,7 +22,7 @@ jobs:
       - name: Check out release tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ inputs.tag || github.ref_name }}
 
       - name: Install tested Codex CLI
         shell: pwsh
@@ -34,25 +36,35 @@ jobs:
 
       - name: Build release archive
         shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           $manifest = Get-Content ./.codex-plugin/plugin.json -Raw | ConvertFrom-Json
           $expectedTag = "v$($manifest.version)"
-          if ("${{ inputs.tag }}" -ne $expectedTag) {
+          if ($env:RELEASE_TAG -ne $expectedTag) {
             throw "Requested tag must match manifest version: $expectedTag"
           }
           ./tools/Build-Release.ps1 -Force
 
-      - name: Upload archive to release
+      - name: Create GitHub release and upload tested assets
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
+          gh release view $env:RELEASE_TAG *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $env:RELEASE_TAG --verify-tag --generate-notes --title "Codex Safe Setup $env:RELEASE_TAG"
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to create release $env:RELEASE_TAG."
+            }
+          }
           $assets = @(Get-ChildItem -LiteralPath ./dist -File)
           if ($assets.Count -ne 2) {
             throw 'Expected one release archive and one SHA-256 checksum.'
           }
           foreach ($asset in $assets) {
-            gh release upload "${{ inputs.tag }}" $asset.FullName --clobber
+            gh release upload $env:RELEASE_TAG $asset.FullName --clobber
             if ($LASTEXITCODE -ne 0) {
               throw "Failed to upload $($asset.Name)."
             }

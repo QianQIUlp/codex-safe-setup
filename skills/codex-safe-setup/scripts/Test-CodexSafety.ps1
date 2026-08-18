@@ -39,26 +39,52 @@ else {
 }
 
 if ($state) {
+    $stateSchema = if ($state.PSObject.Properties['schemaVersion']) { [int]$state.schemaVersion } else { 0 }
+    $stateVersion = if ($state.PSObject.Properties['productVersion']) { [string]$state.productVersion } else { '<legacy>' }
+    $stateCurrent = $stateSchema -eq $script:CssStateSchemaVersion -and $stateVersion -eq $script:CssProductVersion
+    $checks.Add((New-CssCheck -Status $(if ($stateCurrent) { 'PASS' } else { 'FAIL' }) -Control 'Install state schema' -Evidence "Expected schema $($script:CssStateSchemaVersion) and product $($script:CssProductVersion); found schema $stateSchema and product $stateVersion. Run Upgrade-CodexSafety.ps1 when this is legacy state."))
+    if ($state.PSObject.Properties['operation'] -and $state.operation -eq 'Upgrade') {
+        $historyOkay = $state.PSObject.Properties['previousStateSnapshot'] -and $state.previousStateSnapshot -and (Test-Path -LiteralPath $state.previousStateSnapshot -PathType Leaf)
+        $checks.Add((New-CssCheck -Status $(if ($historyOkay) { 'PASS' } else { 'FAIL' }) -Control 'Upgrade rollback chain' -Evidence 'An upgrade must retain an immutable previous-state snapshot.'))
+    }
+
     $approvalExpected = if ($state.ApprovalMode -eq 'BoundedAutonomy') { 'never' } else { 'on-request' }
     $approvalOkay = $configText -match ('(?m)^\s*approval_policy\s*=\s*"' + [regex]::Escape($approvalExpected) + '"')
     $checks.Add((New-CssCheck -Status $(if ($approvalOkay) { 'PASS' } else { 'FAIL' }) -Control 'Approval policy' -Evidence "Expected $approvalExpected for $($state.ApprovalMode)"))
 
     $networkSectionText = Get-CssTomlSectionText -Text $configText -Section 'permissions.codex-safe-workspace.network'
+    $networkDomainsSectionText = Get-CssTomlSectionText -Text $configText -Section 'permissions.codex-safe-workspace.network.domains'
+    $featuresSectionText = Get-CssTomlSectionText -Text $configText -Section 'features'
     $networkEnabled = $networkSectionText -match '(?m)^\s*enabled\s*=\s*true'
+    $proxyEnabled = $featuresSectionText -match '(?m)^\s*network_proxy\s*=\s*true'
+    $hasDomainRules = -not [string]::IsNullOrWhiteSpace($networkDomainsSectionText)
+    $configuredDomains = @([regex]::Matches($networkDomainsSectionText, '(?m)^\s*"(?<domain>[^"]+)"\s*=\s*"allow"\s*$') | ForEach-Object { $_.Groups['domain'].Value } | Sort-Object -Unique)
+    $recordedDomains = @()
+    if ($state.PSObject.Properties['AllowedDomains']) { $recordedDomains = @($state.AllowedDomains | Sort-Object -Unique) }
     if ($state.NetworkMode -eq 'Off') {
-        $checks.Add((New-CssCheck -Status $(if (-not $networkEnabled) { 'PASS' } else { 'FAIL' }) -Control 'Command network' -Evidence 'Network is configured off'))
+        $networkOkay = -not $networkEnabled -and -not $proxyEnabled -and -not $hasDomainRules -and $recordedDomains.Count -eq 0
+        $checks.Add((New-CssCheck -Status $(if ($networkOkay) { 'PASS' } else { 'FAIL' }) -Control 'Command network configuration' -Evidence 'Off requires network disabled, proxy disabled, and no domain rules'))
+    }
+    elseif ($state.NetworkMode -eq 'Allowlist') {
+        $domainsMatchState = $configuredDomains.Count -gt 0 -and (($configuredDomains -join [Environment]::NewLine) -eq ($recordedDomains -join [Environment]::NewLine))
+        $hasGlobalWildcard = $networkDomainsSectionText -match '(?m)^\s*"\*"\s*=\s*"allow"'
+        $networkOkay = $networkEnabled -and $proxyEnabled -and $domainsMatchState -and -not $hasGlobalWildcard
+        $checks.Add((New-CssCheck -Status $(if ($networkOkay) { 'PASS' } else { 'FAIL' }) -Control 'Command network configuration' -Evidence 'Allowlist requires enabled network, an active proxy, exact recorded allow rules, and no global wildcard'))
+    }
+    elseif ($state.NetworkMode -eq 'Unrestricted') {
+
+        $networkOkay = $networkEnabled -and -not $proxyEnabled -and -not $hasDomainRules -and $recordedDomains.Count -eq 0
+        $checks.Add((New-CssCheck -Status $(if ($networkOkay) { 'PASS' } else { 'FAIL' }) -Control 'Command network configuration' -Evidence 'Unrestricted requires direct network access with the filtering proxy disabled and no inert domain table'))
     }
     else {
-        $featuresSectionText = Get-CssTomlSectionText -Text $configText -Section 'features'
-        $proxyEnabled = $featuresSectionText -match '(?m)^\s*network_proxy\s*=\s*true'
-        $checks.Add((New-CssCheck -Status $(if ($networkEnabled -and $proxyEnabled) { 'PASS' } else { 'FAIL' }) -Control 'Command network' -Evidence "Network $($state.NetworkMode) requires enabled access and an active proxy"))
+        $checks.Add((New-CssCheck -Status FAIL -Control 'Command network configuration' -Evidence "Unknown recorded network mode: $($state.NetworkMode)"))
     }
 
     $backupOkay = (-not $state.OriginalConfigExists) -or ($state.ConfigBackup -and (Test-Path -LiteralPath $state.ConfigBackup -PathType Leaf))
     $checks.Add((New-CssCheck -Status $(if ($backupOkay) { 'PASS' } else { 'FAIL' }) -Control 'Rollback' -Evidence 'Original configuration backup or new-file marker is available'))
 
     if ($env:OS -eq 'Windows_NT' -and $state.WindowsSandbox -eq 'Elevated') {
-        $sandboxHealth = Get-CssWindowsSandboxSetupHealth -CodexHome $resolvedHome -ExpectedProxyPort $(if ($state.NetworkMode -eq 'Off') { @() } else { @(3128, 8081) })
+        $sandboxHealth = Get-CssWindowsSandboxSetupHealth -CodexHome $resolvedHome -ExpectedProxyPort $(if ($state.NetworkMode -eq 'Allowlist') { @(3128, 8081) } else { @() })
         $sandboxStatus = if ($sandboxHealth.Status -eq 'CONFLICT') { 'FAIL' } elseif ($sandboxHealth.LatestDesiredMatchesExpected -or $sandboxHealth.Status -eq 'ALIGNED') { 'PASS' } else { 'PARTIAL' }
         $checks.Add((New-CssCheck -Status $sandboxStatus -Control 'Elevated sandbox activation' -Evidence $sandboxHealth.Evidence))
     }
@@ -124,7 +150,20 @@ else {
     $checks.Add((New-CssCheck -Status FAIL -Control 'Install state' -Evidence "Missing or invalid: $statePath"))
 }
 
-$checks.Add((New-CssCheck -Status PARTIAL -Control 'Runtime enforcement' -Evidence 'Restart Codex, select Custom, and run a new sandboxed task to prove OS enforcement; fully quit all Codex processes only if administrator prompts repeat'))
+$runtimeNetworkEvidence = if (-not $state) {
+    'Install state is unavailable, so the expected runtime network behavior is unknown'
+}
+elseif ($state.NetworkMode -eq 'Off') {
+    'A fresh task must prove that a known-reachable external TCP endpoint is blocked'
+}
+elseif ($state.NetworkMode -eq 'Allowlist') {
+    'A fresh task must prove one allowed destination succeeds through the proxy and one denied destination fails; proxy-unaware tools require an explicit proxy adapter'
+}
+else {
+    'A fresh task must prove a direct TCP connection succeeds with a native client such as Test-NetConnection or OpenSSH; a proxy-only banner is not sufficient'
+}
+$checks.Add((New-CssCheck -Status PARTIAL -Control 'Runtime command egress' -Evidence $runtimeNetworkEvidence))
+$checks.Add((New-CssCheck -Status PARTIAL -Control 'Runtime filesystem enforcement' -Evidence 'Restart Codex, select Custom, and run a new sandboxed task to prove OS filesystem enforcement; fully quit all Codex processes only if administrator prompts repeat'))
 $checks.Add((New-CssCheck -Status 'NOT CONTROLLED' -Control 'Other egress surfaces' -Evidence 'Web Search, Browser, Computer Use, apps, plugins, MCP, and cloud tasks use separate controls'))
 
 $overall = if (@($checks | Where-Object Status -eq 'FAIL').Count -gt 0) { 'FAILED' } elseif (@($checks | Where-Object Status -eq 'PARTIAL').Count -gt 0) { 'PARTIALLY VERIFIED' } else { 'VERIFIED' }

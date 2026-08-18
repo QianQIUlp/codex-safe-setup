@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex Safe Setup"
+  short_description: "Audit and harden local Codex permissions safely"
+  default_prompt: "Use $codex-safe-setup to audit my current Codex permissions and install a safer verified profile."

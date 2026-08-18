@@ -183,11 +183,11 @@ check('privacy: no cross-origin resource loads', crossOriginResources.length ===
 
 // ---------------------------------------------------------------- 8. content facts
 const enFacts = [
-  ['install cmd 1', 'codex plugin marketplace add QianQIUlp/codex-safe-setup --ref v0.1.0'],
+  ['install cmd 1', 'codex plugin marketplace add QianQIUlp/codex-safe-setup --ref main'],
   ['install cmd 2', 'codex plugin add codex-safe-setup@codex-safe-setup'],
   ['requires Codex CLI', 'Requires Codex CLI 0.138.0 or newer'],
   ['PowerShell 7', 'PowerShell 7'],
-  ['prompt text', 'Use $secure-codex-setup to audit my current permissions'],
+  ['prompt text', 'Use $codex-safe-setup to audit my current permissions'],
   ['sha256 note', 'Get-FileHash -Algorithm SHA256'],
   ['principle', 'Approval is not a security boundary.'],
   ['test: config read', 'build-config.json'],
@@ -242,9 +242,9 @@ const zhFacts = [
   ['zh install flow', '只读评估'],
   ['zh exposed: revoke', '吊销或轮换'],
   ['zh facts: checksum', 'SHA-256 校验文件'],
-  ['zh install', 'codex plugin marketplace add QianQIUlp/codex-safe-setup --ref v0.1.0'],
+  ['zh install', 'codex plugin marketplace add QianQIUlp/codex-safe-setup --ref main'],
   ['zh requires', 'Codex CLI 0.138.0 或更高版本'],
-  ['zh prompt', '$secure-codex-setup 审计我当前的 Codex 权限'],
+  ['zh prompt', '$codex-safe-setup 审计我当前的 Codex 权限'],
   ['zh sha', 'Get-FileHash -Algorithm SHA256'],
   ['zh threat cta', '阅读威胁模型'],
   ['zh NOT CONTROLLED', 'NOT CONTROLLED'],

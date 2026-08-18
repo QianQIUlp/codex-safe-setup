@@ -1,5 +1,7 @@
 Set-StrictMode -Version Latest
 
+$script:CssStateSchemaVersion = 2
+$script:CssProductVersion = '0.1.2'
 $script:CssManagedStart = '# >>> codex-safe-setup managed >>>'
 $script:CssManagedEnd = '# <<< codex-safe-setup managed <<<'
 $script:CssProfileName = 'codex-safe-workspace'
@@ -296,6 +298,7 @@ function Get-CssWindowsSandboxSetupHealth {
     )
 
     $expected = ConvertTo-CssNormalizedPortSet -Ports ($ExpectedProxyPort -join ',')
+    $expectedLabel = if ($expected) { $expected } else { '<none>' }
     $emptyResult = [ordered]@{
         Available = $false
         Status = 'UNAVAILABLE'
@@ -303,7 +306,7 @@ function Get-CssWindowsSandboxSetupHealth {
         PortOscillationDetected = $false
         LatestStoredPorts = $null
         LatestDesiredPorts = $null
-        ExpectedProxyPorts = $(if ($expected) { $expected } else { $null })
+        ExpectedProxyPorts = $expectedLabel
         LatestDesiredMatchesExpected = $null
         Evidence = 'No readable Windows sandbox setup log was found.'
     }
@@ -359,10 +362,10 @@ function Get-CssWindowsSandboxSetupHealth {
     }
 
     $latest = $events[$events.Count - 1]
-    $matchesExpected = if ($expected) { $latest.DesiredPorts -eq $expected } else { $null }
-    $status = if ($expected -and -not $matchesExpected) { 'CONFLICT' } elseif ($oscillation) { 'OSCILLATION_HISTORY' } else { 'ALIGNED' }
+    $matchesExpected = $latest.DesiredPorts -eq $expected
+    $status = if (-not $matchesExpected) { 'CONFLICT' } elseif ($oscillation) { 'OSCILLATION_HISTORY' } else { 'ALIGNED' }
     $evidence = "Observed $($events.Count) firewall port-change setup event(s); latest stored [$($latest.StoredPorts)] -> desired [$($latest.DesiredPorts)]."
-    if ($expected) { $evidence += " Managed proxy expectation: [$expected]." }
+    $evidence += " Managed proxy expectation: [$expectedLabel]."
     if ($oscillation) { $evidence += ' A direct port-set reversal was detected; stale or concurrent Codex processes can repeatedly invalidate elevated setup.' }
 
     return [pscustomobject]@{
@@ -372,7 +375,7 @@ function Get-CssWindowsSandboxSetupHealth {
         PortOscillationDetected = $oscillation
         LatestStoredPorts = $latest.StoredPorts
         LatestDesiredPorts = $latest.DesiredPorts
-        ExpectedProxyPorts = $(if ($expected) { $expected } else { $null })
+        ExpectedProxyPorts = $expectedLabel
         LatestDesiredMatchesExpected = $matchesExpected
         Evidence = $evidence
     }

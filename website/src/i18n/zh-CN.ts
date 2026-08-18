@@ -339,12 +339,12 @@ export const zhCN: UiContent = {
     lead: '两条命令，一句指令——之后插件会先审计、解释取舍，只有在你确认后才写入配置。',
     requires: '需要 Codex CLI 0.138.0 或更高版本 · Windows 上推荐 PowerShell 7',
     commands: [
-      'codex plugin marketplace add QianQIUlp/codex-safe-setup --ref v0.1.0',
+      'codex plugin marketplace add QianQIUlp/codex-safe-setup --ref main',
       'codex plugin add codex-safe-setup@codex-safe-setup',
     ],
     promptLabel: '新建一个 Codex 任务或 CLI 会话，然后输入：',
-    promptText: '使用 $secure-codex-setup 审计我当前的 Codex 权限，并安装推荐的安全配置。',
-    releaseNote: '推荐 marketplace 安装方式，因为 Codex 能记录来源和版本。',
+    promptText: '使用 $codex-safe-setup 审计我当前的 Codex 权限，并安装推荐的安全配置。',
+    releaseNote: 'GitHub marketplace 跟随 main，其目录固定到最新 Release；更新时刷新 marketplace 并重新安装插件包。',
     shaNote: '每个 Release 都附带可安装 ZIP 和 .sha256 文件。可在 PowerShell 中用 Get-FileHash -Algorithm SHA256 <压缩包> 核对。',
     detailsCta: {
       label: '查看安装详情',
