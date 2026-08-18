@@ -89,58 +89,10 @@ $openAiYaml = [IO.File]::ReadAllText($openAiYamlPath)
 Assert-True ($openAiYaml -match '(?m)^\s*display_name:\s*"[^"]+"\s*$') 'openai.yaml display_name is required and must be quoted.'
 Assert-True ($openAiYaml -match '(?m)^\s*short_description:\s*"[^"]{25,64}"\s*$') 'openai.yaml short_description must be quoted and 25-64 characters.'
 $legacySkillText = [IO.File]::ReadAllText($legacySkillPath)
-Assert-True ($legacySkillText -match '(?m)^name:\s*secure-codex-setup\s*\s*"[^"]*\$codex-safe-setup[^"]*"\s*$') 'openai.yaml default_prompt must mention $codex-safe-setup.'
-
-$powerShellFiles = Get-ChildItem -LiteralPath $repositoryRoot -Recurse -File -Filter '*.ps1' -ErrorAction SilentlyContinue |
-    Where-Object { $_.FullName -notlike (Join-Path $repositoryRoot 'dist*') }
-foreach ($file in $powerShellFiles) {
-    $tokens = $null
-    $parseErrors = $null
-    [void][System.Management.Automation.Language.Parser]::ParseFile(
-        $file.FullName,
-        [ref]$tokens,
-        [ref]$parseErrors
-    )
-    if ($parseErrors.Count -gt 0) {
-        throw ("PowerShell parse error in {0}: {1}" -f $file.FullName, ($parseErrors.Message -join '; '))
-    }
-}
-
-Write-Output 'PASS: plugin manifest and release metadata'
-Write-Output 'PASS: Git-backed marketplace metadata'
-Write-Output 'PASS: canonical skill, compatibility alias, and UI metadata'
-Write-Output 'PASS: unrestricted-network disclosure and Windows Custom activation handoff'
-Write-Output 'PASS: required community and security documentation'
-Write-Output ("PASS: PowerShell syntax ({0} files)" -f $powerShellFiles.Count)
-
-) 'Legacy compatibility alias must retain the old skill name.'
+Assert-True ($legacySkillText -match '(?m)^name:\s*secure-codex-setup\s*$') 'Legacy compatibility alias must retain the old skill name.'
 Assert-True ($legacySkillText -match '\$codex-safe-setup') 'Legacy compatibility alias must delegate to the canonical skill.'
 $legacyOpenAiYaml = [IO.File]::ReadAllText((Join-Path $legacySkillRoot 'agents/openai.yaml'))
-Assert-True ($legacyOpenAiYaml -match '(?m)^\s*allow_implicit_invocation:\s*false\s*\s*"[^"]*\$codex-safe-setup[^"]*"\s*$') 'openai.yaml default_prompt must mention $codex-safe-setup.'
-
-$powerShellFiles = Get-ChildItem -LiteralPath $repositoryRoot -Recurse -File -Filter '*.ps1' -ErrorAction SilentlyContinue |
-    Where-Object { $_.FullName -notlike (Join-Path $repositoryRoot 'dist*') }
-foreach ($file in $powerShellFiles) {
-    $tokens = $null
-    $parseErrors = $null
-    [void][System.Management.Automation.Language.Parser]::ParseFile(
-        $file.FullName,
-        [ref]$tokens,
-        [ref]$parseErrors
-    )
-    if ($parseErrors.Count -gt 0) {
-        throw ("PowerShell parse error in {0}: {1}" -f $file.FullName, ($parseErrors.Message -join '; '))
-    }
-}
-
-Write-Output 'PASS: plugin manifest and release metadata'
-Write-Output 'PASS: Git-backed marketplace metadata'
-Write-Output 'PASS: skill frontmatter and UI metadata'
-Write-Output 'PASS: unrestricted-network disclosure and Windows Custom activation handoff'
-Write-Output 'PASS: required community and security documentation'
-Write-Output ("PASS: PowerShell syntax ({0} files)" -f $powerShellFiles.Count)
-
-) 'Legacy compatibility alias must not be selected implicitly.'
+Assert-True ($legacyOpenAiYaml -match '(?m)^\s*allow_implicit_invocation:\s*false\s*$') 'Legacy compatibility alias must not be selected implicitly.'
 $upgradeScriptText = [IO.File]::ReadAllText($upgradeScriptPath)
 Assert-True ($upgradeScriptText -match 'ConfirmUpgrade') 'Dedicated upgrade flow must require explicit upgrade confirmation.'
 Assert-True ($upgradeScriptText -match 'Upgrade\s*=\s*\$true') 'Dedicated upgrade flow must invoke installer upgrade mode.'
@@ -164,7 +116,7 @@ foreach ($file in $powerShellFiles) {
 
 Write-Output 'PASS: plugin manifest and release metadata'
 Write-Output 'PASS: Git-backed marketplace metadata'
-Write-Output 'PASS: skill frontmatter and UI metadata'
+Write-Output 'PASS: canonical skill, compatibility alias, and UI metadata'
 Write-Output 'PASS: unrestricted-network disclosure and Windows Custom activation handoff'
 Write-Output 'PASS: required community and security documentation'
 Write-Output ("PASS: PowerShell syntax ({0} files)" -f $powerShellFiles.Count)
