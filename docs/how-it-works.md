@@ -98,4 +98,3 @@ Exact locations depend on `CODEX_HOME`, which defaults to the normal Codex user 
 - `skills/codex-safe-setup/references/`: detailed profile, security, and recovery guidance loaded when needed.
 - `tests/`: isolated integration and package checks.
 - `tools/Build-Release.ps1`: install-ready ZIP builder.
-

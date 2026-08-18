@@ -389,4 +389,3 @@ function New-CssCheck {
     )
     return [pscustomobject]@{ Status = $Status; Control = $Control; Evidence = $Evidence }
 }
-

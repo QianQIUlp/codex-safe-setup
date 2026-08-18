@@ -7,4 +7,3 @@ The plugin operates inside ChatGPT or Codex. Prompts, model context, terminal ou
 Command networking is off by default. `Allowlist` enables the Codex filtering proxy; `Unrestricted` disables that proxy and permits direct networking, so it requires an explicit high-risk acknowledgement.
 
 Do not provide real secrets as test data. If a credential may have been exposed, revoke or rotate it and review provider activity.
-

@@ -47,4 +47,3 @@ The managed profile extends `:workspace`, denies `:root`, permits `:minimal` rea
 Permission profiles are Beta. The installer refuses to combine them silently with legacy `sandbox_mode` or `[sandbox_workspace_write]`. Use `-MigrateLegacySettings` only after review; the original file is backed up first.
 
 Base installation can proceed without Codex CLI, but exact version and rule behavior remain partially verified. A complete result requires a compatible CLI and successful `codex execpolicy check`.
-

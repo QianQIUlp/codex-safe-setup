@@ -127,4 +127,3 @@ Write-Output ("PowerShell 7: {0}; Codex CLI: {1}; Git: {2}" -f $powershell7.Pres
 Write-Output ("Known sensitive locations present (contents not read): {0}" -f $knownSensitiveLocations.Count)
 foreach ($finding in $findings) { Write-Output ("[{0}] {1}" -f $finding.Severity, $finding.Finding) }
 Write-Output '[NOT CONTROLLED] Web Search, Browser, Computer Use, apps, plugins, MCP, and cloud tasks use separate controls.'
-

@@ -81,4 +81,3 @@ Configuration parsing, file inspection, and `codex execpolicy check` show that t
 - Capturing secrets in checkpoints.
 - Automatically restoring or overwriting a working tree.
 - Weakening other security controls to make installation easier.
-

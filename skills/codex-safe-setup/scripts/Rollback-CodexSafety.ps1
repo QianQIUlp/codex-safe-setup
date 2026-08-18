@@ -127,4 +127,3 @@ else {
     Write-CssTextAtomic -Path $statePath -Text ($state | ConvertTo-Json -Depth 8)
 }
 Write-Output 'Rollback complete. Restart Codex so the restored configuration becomes active.'
-

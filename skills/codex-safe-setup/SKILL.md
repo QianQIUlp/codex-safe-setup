@@ -131,4 +131,3 @@ Run `Rollback-CodexSafety.ps1` without confirmation first so it shows the target
 Allow only the installed `New-CodexCheckpoint.ps1` bridge through the exact PowerShell 7 executable and exact script path. Never allow a general `pwsh`, `powershell`, `git`, shell-wrapper, or arbitrary-script prefix.
 
 The bridge must accept only registered repositories, refuse sensitive-looking untracked files, create a hidden Git commit and dedicated ref without changing the branch or index, expose save/list only, and leave restoration user-controlled.
-

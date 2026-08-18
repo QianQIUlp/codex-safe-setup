@@ -344,7 +344,7 @@ export const zhCN: UiContent = {
     ],
     promptLabel: '新建一个 Codex 任务或 CLI 会话，然后输入：',
     promptText: '使用 $codex-safe-setup 审计我当前的 Codex 权限，并安装推荐的安全配置。',
-    releaseNote: '推荐 marketplace 安装方式，因为 Codex 能记录来源和版本。',
+    releaseNote: 'GitHub marketplace 跟随 main，其目录固定到最新 Release；更新时刷新 marketplace 并重新安装插件包。',
     shaNote: '每个 Release 都附带可安装 ZIP 和 .sha256 文件。可在 PowerShell 中用 Get-FileHash -Algorithm SHA256 <压缩包> 核对。',
     detailsCta: {
       label: '查看安装详情',

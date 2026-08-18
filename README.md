@@ -1,6 +1,6 @@
 # Codex Safe Setup
 
-[????](README.zh-CN.md) � [Threat model](docs/threat-model.md) � [How it works](docs/how-it-works.md) � [Contributing](CONTRIBUTING.md)
+[简体中文](README.zh-CN.md) · [Threat model](docs/threat-model.md) · [How it works](docs/how-it-works.md) · [Contributing](CONTRIBUTING.md)
 
 [![CI](https://github.com/QianQIUlp/codex-safe-setup/actions/workflows/ci.yml/badge.svg)](https://github.com/QianQIUlp/codex-safe-setup/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/QianQIUlp/codex-safe-setup)](https://github.com/QianQIUlp/codex-safe-setup/releases)
@@ -10,7 +10,7 @@
 
 Codex Safe Setup is a community-built Codex plugin for installing a least-privilege, recoverable local configuration. It begins with a read-only audit, explains the actual tradeoffs, asks before every consequential choice, writes a backed-up configuration only after confirmation, and verifies the result.
 
-The project exists because "I will review every command" and "another AI will review every command" are both fallible strategies. Full Access can also expose credentials and private files to an agent run even when no destructive command is executed. Hard capability boundaries reduce the impact of mistakes; approval remains a workflow choice inside and around those boundaries.
+The project exists because “I will review every command” and “another AI will review every command” are both fallible strategies. Full Access can also expose credentials and private files to an agent run even when no destructive command is executed. Hard capability boundaries reduce the impact of mistakes; approval remains a workflow choice inside and around those boundaries.
 
 This project is not an absolute-safety guarantee and is not an official OpenAI project. It is distributed through a third-party GitHub marketplace; it has not been submitted to or listed in OpenAI's universal public plugin directory.
 
@@ -140,4 +140,3 @@ The project is licensed under [Apache-2.0](LICENSE).
 ## References
 
 The implementation follows current OpenAI documentation for [plugins and marketplace distribution](https://developers.openai.com/plugins/build/plugins), [skills](https://learn.chatgpt.com/docs/build-skills), [permission profiles](https://learn.chatgpt.com/docs/permissions), [sandboxing and approvals](https://learn.chatgpt.com/docs/agent-approvals-security), [Windows sandboxing](https://learn.chatgpt.com/docs/windows/windows-sandbox), and [command rules](https://learn.chatgpt.com/docs/agent-configuration/rules). These surfaces evolve; rerun verification after Codex upgrades.
-

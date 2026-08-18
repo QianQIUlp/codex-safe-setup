@@ -120,4 +120,3 @@ Write-Output 'PASS: canonical skill, compatibility alias, and UI metadata'
 Write-Output 'PASS: unrestricted-network disclosure and Windows Custom activation handoff'
 Write-Output 'PASS: required community and security documentation'
 Write-Output ("PASS: PowerShell syntax ({0} files)" -f $powerShellFiles.Count)
-

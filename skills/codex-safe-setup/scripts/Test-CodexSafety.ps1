@@ -170,4 +170,3 @@ $overall = if (@($checks | Where-Object Status -eq 'FAIL').Count -gt 0) { 'FAILE
 $report = [pscustomobject]@{ Overall = $overall; ConfigPath = $resolvedConfig; Checks = $checks }
 if ($AsJson) { $report | ConvertTo-Json -Depth 6 } else { Write-Output "Codex Safe Setup - $overall"; $checks | Format-Table -AutoSize | Out-String | Write-Output }
 if ($overall -eq 'FAILED') { exit 1 }
-

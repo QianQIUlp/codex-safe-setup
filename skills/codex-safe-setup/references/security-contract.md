@@ -30,4 +30,3 @@ Never print, hash, upload, or otherwise process a real secret merely to prove th
 - `PARTIAL`: configuration evidence exists, but a required runtime or CLI check was unavailable.
 - `FAIL`: a required condition is missing or contradictory.
 - `NOT CONTROLLED`: the capability uses a separate control surface.
-

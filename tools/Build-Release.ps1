@@ -93,4 +93,3 @@ $hash = Get-FileHash -LiteralPath $archivePath -Algorithm SHA256
 Write-Output ("Built: {0}" -f $archivePath)
 Write-Output ("SHA256: {0}" -f $hash.Hash)
 Write-Output ("Checksum: {0}" -f $checksumPath)
-

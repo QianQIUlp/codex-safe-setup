@@ -351,7 +351,7 @@ export const en: UiContent = {
     promptText:
       'Use $codex-safe-setup to audit my current permissions and install the recommended profile.',
     releaseNote:
-      'The marketplace method is preferred because Codex can track the plugin source and version.',
+      'The GitHub marketplace follows main, whose catalog pins the latest release. Refresh the marketplace and reinstall the plugin bundle to update.',
     shaNote:
       'Each release also ships an install-ready ZIP with a .sha256 file. Verify the archive in PowerShell with Get-FileHash -Algorithm SHA256 <archive>.',
     detailsCta: {
