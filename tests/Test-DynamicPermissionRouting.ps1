@@ -149,7 +149,7 @@ try {
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
     $startInfo.CreateNoWindow = $true
-    $startInfo.WorkingDirectory = $workspace
+    $startInfo.WorkingDirectory = $projectRoot
     $startInfo.Environment['CODEX_HOME'] = $dynamicHome
 
     if ([IO.Path]::GetExtension($codexCommand.Source) -eq '.ps1') {
