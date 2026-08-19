@@ -48,7 +48,7 @@ Lead with: **Do not treat approval as safety. Limit what the agent can change, r
 Choose the permission-routing mode before approval or network settings:
 
 - `DynamicUi` (default for 0.1.6): do not write `default_permissions` or a named profile. Use the legacy `sandbox_mode` / `sandbox_workspace_write` route so Full Access, Workspace, and Read-only changes apply to the next user message without restarting Codex. Disclose that legacy workspace semantics allow broad filesystem reads and cannot enforce the StrictProfile credential deny-globs. Require `-AcknowledgeDynamicUiReadScope` before apply. DynamicUi supports `Off` and `Unrestricted`; it rejects `Allowlist` because a persistent proxy would keep constraining Full Access.
-- `StrictProfile`: retain the named root-deny, minimal-read, credential-deny, and proxy-allowlist profile. Use it when those boundaries matter more than pure same-task Full Access switching.
+- `StrictProfile`: retain the named root-deny, minimal-read, credential-deny, and proxy-allowlist profile. In the UI this remains the Custom / 自定义 `codex-safe-workspace` route. Use it when those boundaries matter more than pure same-task Full Access switching.
 
 Offer these approval modes over the selected filesystem route:
 
