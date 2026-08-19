@@ -1,0 +1,17 @@
+{
+  "agy-safety-guard": {
+    "enabled": true,
+    "PreToolUse": [
+      {
+        "matcher": "view_file|replace_file_content|write_to_file|multi_replace_file_content|run_command|read_url_content|browser_.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./skills/secure-agy-setup/scripts/AgySafetyHook.js",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

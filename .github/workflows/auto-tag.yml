@@ -1,0 +1,67 @@
+name: Auto tag release
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".codex-plugin/plugin.json"
+      - ".agents/plugins/marketplace.json"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-tag-release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Install tested Codex CLI
+        shell: pwsh
+        run: npm install --global @openai/codex@0.147.0
+
+      - name: Validate release candidate
+        shell: pwsh
+        run: |
+          ./tests/Validate-Package.ps1
+          ./tests/Run-Tests.ps1
+      - name: Validate and create missing release tag
+        shell: pwsh
+        run: |
+          $manifest = Get-Content ./.codex-plugin/plugin.json -Raw | ConvertFrom-Json
+          $marketplace = Get-Content ./.agents/plugins/marketplace.json -Raw | ConvertFrom-Json
+          $version = [string]$manifest.version
+          if ($version -notmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$') {
+            throw "Manifest version is not a releasable semantic version: $version"
+          }
+          $tag = "v$version"
+          if ($marketplace.plugins[0].source.ref -ne $tag) {
+            throw "Marketplace ref must match the manifest release tag: $tag"
+          }
+          if (-not (Select-String -LiteralPath ./CHANGELOG.md -Pattern "^## $([regex]::Escape($version)) - " -Quiet)) {
+            throw "CHANGELOG.md is missing the $version release heading."
+          }
+
+          git ls-remote --exit-code --tags origin "refs/tags/$tag" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Output "Release tag already exists: $tag"
+            exit 0
+          }
+          if ($LASTEXITCODE -ne 2) {
+            throw "Unable to determine whether release tag $tag exists."
+          }
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a $tag -m "Codex Safe Setup $tag"
+          git push origin "refs/tags/$tag"
+

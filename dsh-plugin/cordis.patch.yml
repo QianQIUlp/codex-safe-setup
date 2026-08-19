@@ -1,0 +1,5 @@
+# dsh-safe-setup bundle patch: insert this plugin next to the shipped rows.
+# Guards stay inert until /safe-setup completes once.
+- insert:
+    - id: dsh-safe-setup
+      name: dsh-safe-setup
