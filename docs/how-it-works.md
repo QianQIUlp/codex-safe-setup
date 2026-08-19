@@ -19,25 +19,30 @@ flowchart LR
 
 `Assess-CodexSafety.ps1` reads configuration, relevant path existence, and tool versions. It does not read secret contents. Its report separates the approval reviewer, filesystem policy, command-network policy, Windows sandbox implementation, prerequisite status, legacy conflicts, and external surfaces.
 
-### 2. Select a profile
+### 2. Select a routing mode
 
-All three approval modes use the same least-privilege filesystem profile:
+Version 0.1.6 separates permission routing from approval policy:
+
+- `DynamicUi` removes the plugin-owned named profile/default pin and uses `sandbox_mode` as a fallback. The Desktop can then change the same thread to Full Access, Workspace, or Read-only for the next message.
+- `StrictProfile` uses `default_permissions = "codex-safe-workspace"` with root deny-read, credential deny-globs, and optional proxy allowlists. It is the stronger read boundary but is not the pure dynamic Full Access route.
+
+All three approval modes work with either route:
 
 - `BoundedAutonomy`: `approval_policy = "never"`; out-of-bound actions fail.
 - `AskMe`: eligible requests use `on-request` with the user as reviewer.
 - `AutoReview`: eligible requests use `on-request` with an agent reviewer.
 
-Command networking is configured separately as offline with no proxy, proxy-enforced allowlist, or explicitly acknowledged direct unrestricted access with no proxy. The last mode is what enables proxy-unaware native protocols such as OpenSSH.
+Command networking is configured separately as offline with no proxy, proxy-enforced allowlist, or explicitly acknowledged direct unrestricted access with no proxy. DynamicUi supports Off and Unrestricted; it rejects Allowlist because a persistent proxy would keep constraining Full Access. StrictProfile supports all three modes.
 
-default_permissions selects only the fallback profile. An explicit task-level UI selection must take precedence; Full Access is accepted only when the returned activePermissionProfile is :danger-full-access (or equivalent authoritative task metadata).
+DynamicUi uses legacy workspace semantics. It constrains writes and command networking but allows broad filesystem reads, so it cannot enforce the StrictProfile credential deny-globs. Applying it requires an explicit read-scope acknowledgement.
 
 ### 3. Preview and apply
 
 `Install-CodexSafety.ps1 -PlanOnly` shows the exact managed targets and decisions without changing them. Applying requires `-ConfirmApply -NonInteractive`. High-risk or administrator-backed choices require additional acknowledgements. Legacy sandbox migration is rejected unless `-MigrateLegacySettings` is present.
 
-The installer preserves unrelated TOML content, backs up each managed target, writes the permission profile and rule, registers authorized workspace roots, installs a synthetic outside-workspace canary, and records rollback state.
+The installer preserves unrelated TOML content, backs up each managed target, writes the selected permission route and rule, registers authorized workspace roots, installs a synthetic outside-workspace canary, and records rollback state.
 
-On Windows, writing the configuration is not the activation boundary. Restart Codex and use a new task because an existing execution environment retains its original sandbox and proxy state. If administrator prompts repeat, close every Codex desktop and CLI process before one clean relaunch. The preferred `Elevated` sandbox may request administrator-approved OS setup, but it does not elevate each workspace command.
+A machine-configuration change needs one fresh task. After that activation, DynamicUi changes are different: select Full Access, Workspace, or Read-only and send the next user message; the same task must adopt the corresponding sandbox without restarting Codex. If administrator prompts repeat on Windows, close every Codex desktop and CLI process before one clean relaunch.
 
 The Windows sandbox stores firewall setup for the active network route. `Allowlist` expects loopback proxy ports 3128 and 8081; `Off` and direct `Unrestricted` expect no proxy ports. If an older task and a newly configured task use different port sets, each can invalidate the other's global setup and cause another administrator prompt. The read-only assessment retains only matching firewall port-change records from Codex's sandbox log and reports `WindowsSandboxSetupHealth`; it never includes logged command lines. A `CONFLICT` means the latest setup does not match the selected mode. `OSCILLATION_HISTORY` means a direct reversal occurred but the latest setup is aligned, so verification passes and no action is required unless prompts recur.
 
@@ -45,13 +50,13 @@ The Windows sandbox stores firewall setup for the active network route. `Allowli
 
 `Upgrade-CodexSafety.ps1` reads the active install state and preserves its recorded selections by default. Running it without `-ConfirmUpgrade` is plan-only. A confirmed upgrade creates a unique transaction directory under `safe-setup/backups`, snapshots the previous active state under `safe-setup/state-history`, and then invokes the same deterministic installer in explicit upgrade mode.
 
-Version 0.1.5 also removes the alternate Status/Commit Git backend and rewrites old workspace registries to the Save/List-only recovery schema. The plugin bundle, applied machine configuration, install-state history, and already-running task are separate layers. Refreshing or reinstalling the plugin changes only the first layer. The configuration upgrade changes the second and third layers after review. A full restart and fresh task activate the fourth.
+Version 0.1.5 removed the alternate Status/Commit Git backend and rewrote old workspace registries to Save/List-only recovery. Version 0.1.6 migrates schema 4 to schema 5; its default DynamicUi upgrade removes the stale named-profile pin while preserving any existing UI-selected sandbox fallback. Plugin refresh, machine configuration, install-state history, and already-running task remain separate layers.
 
 ### 5. Verify
 
 `Test-CodexSafety.ps1` checks the generated configuration and, when a compatible CLI is available, calls `codex execpolicy check` against both allowed and deliberately broad command prefixes. Missing CLI verification produces `PARTIAL`, never a false `PASS`.
 
-Runtime checks are route-specific and require a new task after machine-configuration changes: Off proves a reachable endpoint is blocked; Allowlist proves an allowed domain succeeds through the proxy while an unlisted domain fails; Unrestricted proves native direct TCP or OpenSSH works without treating a proxy-only banner as sufficient. Task permission checks are separate: Full Access must report activePermissionProfile.id = :danger-full-access, and the codexsandboxonline/offline account name is not evidence.
+Runtime checks are route-specific and use a fresh task after machine-configuration changes. The DynamicUi integration test then updates one live thread from Workspace to Full Access and back, requiring `thread/settings/updated` to report `dangerFullAccess` and `workspaceWrite` in sequence. StrictProfile verification uses `activePermissionProfile`. The codexsandboxonline/offline account name is never permission evidence.
 
 ### 6. Roll back
 
@@ -80,9 +85,9 @@ Exact locations depend on `CODEX_HOME`, which defaults to the normal Codex user 
 | Target | Purpose |
 |---|---|
 | `config.toml` | Active permission, approval, sandbox, and network selections |
-| `rules/codex-safe-setup.rules` | Exact status/checkpoint/opt-in commit bridge rule |
-| `safe-setup/bin/New-CodexCheckpoint.ps1` | Installed narrow checkpoint bridge |
-| `safe-setup/authorized-workspaces.json` | Canonical roots, commit-enabled roots, allowed branch prefixes, and pinned Git |
+| `rules/codex-safe-setup.rules` | Exact Save/List recovery bridge rule |
+| `safe-setup/bin/New-CodexCheckpoint.ps1` | Installed narrow recovery bridge |
+| `safe-setup/authorized-workspaces.json` | Canonical roots and pinned Git for recovery checkpoints |
 | `safe-setup/backups/<transaction>/*` | Restore material isolated by install or upgrade transaction |
 | `safe-setup/state-history/*` | Immutable prior-state snapshots and rolled-back state records |
 | `safe-setup/outside-workspace-canary.txt` | Synthetic target for boundary testing |

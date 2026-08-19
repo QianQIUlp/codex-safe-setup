@@ -2,6 +2,14 @@
 
 All notable changes are documented here. Releases follow semantic versioning.
 
+## 0.1.6 - 2026-08-19
+
+- Add `DynamicUi` routing, which removes the plugin-owned named-profile/default pin and uses the Desktop-compatible sandbox route so Full Access, Workspace, and Read-only changes apply on the next user message in the same task.
+- Preserve an existing UI-selected `sandbox_mode` during the 0.1.5 upgrade; when none exists, install a workspace fallback. Record routing state as schema 5.
+- Retain `StrictProfile` as the explicit alternative for root deny-read, credential deny-globs, and proxy allowlists. DynamicUi discloses its broader legacy read scope and requires acknowledgement.
+- Add the exact deleted-default/mixed-profile regression and an app-server integration test that switches one live thread from Workspace to Full Access and back.
+- Align plugin, marketplace, tests, documentation, tag, archive, checksum, and release metadata at 0.1.6.
+
 ## 0.1.5 - 2026-08-18
 
 - Keep codex-safe-workspace as the normal default while preserving explicit task-level UI overrides; Full Access is accepted only when the effective runtime is :danger-full-access.

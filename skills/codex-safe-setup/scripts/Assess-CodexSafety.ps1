@@ -39,15 +39,19 @@ if ($codexCli.Version -and $codexCli.Version -match '(\d+\.\d+\.\d+)') {
 
 $profileMatch = [regex]::Match($configText, '(?m)^\s*default_permissions\s*=\s*["'']([^"'']+)["'']')
 $sandboxModeMatch = [regex]::Match($configText, '(?m)^\s*sandbox_mode\s*=\s*["'']([^"'']+)["'']')
+$profileSettings = Get-CssPermissionProfileSettings -Text $configText
 $fullAccess = ($profileMatch.Success -and $profileMatch.Groups[1].Value -eq ':danger-full-access') -or ($sandboxModeMatch.Success -and $sandboxModeMatch.Groups[1].Value -eq 'danger-full-access')
 $approvalMatch = [regex]::Match($configText, '(?m)^\s*approval_policy\s*=\s*["'']([^"'']+)["'']')
 $reviewerMatch = [regex]::Match($configText, '(?m)^\s*approvals_reviewer\s*=\s*["'']([^"'']+)["'']')
 $windowsSectionText = Get-CssTomlSectionText -Text $configText -Section 'windows'
 $windowsMatch = [regex]::Match($windowsSectionText, '(?m)^\s*sandbox\s*=\s*["'']([^"'']+)["'']')
 $managedProfile = $configText.Contains($script:CssManagedStart) -and $configText -match '(?m)^\s*":root"\s*=\s*"deny"'
-$networkSectionText = Get-CssTomlSectionText -Text $configText -Section 'permissions.codex-safe-workspace.network'
+$dynamicUiRoutingReady = $sandboxModeMatch.Success -and -not $profileSettings.DefaultPresent -and -not $profileSettings.ManagedProfilePresent
+$permissionRouting = if ($dynamicUiRoutingReady) { 'DynamicUi' } elseif ($managedProfile -and $profileMatch.Success) { 'StrictProfile' } else { 'Unknown' }
+$profileNetworkSectionText = Get-CssTomlSectionText -Text $configText -Section 'permissions.codex-safe-workspace.network'
+$legacyNetworkSectionText = Get-CssTomlSectionText -Text $configText -Section 'sandbox_workspace_write'
 $featuresSectionText = Get-CssTomlSectionText -Text $configText -Section 'features'
-$networkEnabled = $networkSectionText -match '(?m)^\s*enabled\s*=\s*true'
+$networkEnabled = if ($permissionRouting -eq 'DynamicUi') { $legacyNetworkSectionText -match '(?m)^\s*network_access\s*=\s*true' } else { $profileNetworkSectionText -match '(?m)^\s*enabled\s*=\s*true' }
 $networkProxy = $featuresSectionText -match '(?m)^\s*network_proxy\s*=\s*true'
 $commandNetworkRoute = if (-not $networkEnabled) { 'Off' } elseif ($networkProxy) { 'ProxyFiltered' } else { 'DirectUnrestricted' }
 $windowsSandbox = $(if ($windowsMatch.Success) { $windowsMatch.Groups[1].Value } else { $null })
@@ -66,7 +70,12 @@ $findings = [Collections.Generic.List[object]]::new()
 if ($fullAccess) { $findings.Add([pscustomobject]@{ Severity = 'HIGH'; Finding = 'The configured default is Full Access, which removes the local sandbox boundary.' }) }
 if ($legacy.Present -and $profileMatch.Success) { $findings.Add([pscustomobject]@{ Severity = 'HIGH'; Finding = 'Legacy sandbox keys and permission profiles coexist; legacy settings can take precedence.' }) }
 if ($networkEnabled -and -not $networkProxy) { $findings.Add([pscustomobject]@{ Severity = 'HIGH'; Finding = 'Command network is direct and unrestricted; domain rules are not enforced. This is appropriate only when direct protocols are required and unrestricted-network risk was explicitly accepted.' }) }
-if (-not $managedProfile) { $findings.Add([pscustomobject]@{ Severity = 'MEDIUM'; Finding = 'No verified root-deny, workspace-only managed profile was detected.' }) }
+if ($permissionRouting -eq 'DynamicUi') {
+    $findings.Add([pscustomobject]@{ Severity = 'MEDIUM'; Finding = 'DynamicUi routing is active: same-task permission switching is available, but the strict profile credential deny-read boundary is not active.' })
+}
+elseif (-not $managedProfile) {
+    $findings.Add([pscustomobject]@{ Severity = 'MEDIUM'; Finding = 'No verified root-deny, workspace-only managed profile was detected.' })
+}
 if (-not $codexCli.Present) { $findings.Add([pscustomobject]@{ Severity = 'INFO'; Finding = 'Codex CLI is absent, so rule and version checks will be partial.' }) }
 elseif (-not $codexVersionSupported) { $findings.Add([pscustomobject]@{ Severity = 'HIGH'; Finding = 'Detected Codex CLI does not prove support for permission profiles (minimum recognized version: 0.138.0).' }) }
 if ($env:OS -eq 'Windows_NT' -and -not $powershell7.Present) { $findings.Add([pscustomobject]@{ Severity = 'INFO'; Finding = 'PowerShell 7 is absent; bootstrap can continue with reduced shell consistency.' }) }
@@ -85,6 +94,8 @@ $report = [pscustomobject]@{
     FullAccessDetected = [bool]$fullAccess
     ConfiguredDefaultFullAccess = [bool]$fullAccess
     PermissionProfile = $(if ($profileMatch.Success) { $profileMatch.Groups[1].Value } else { $null })
+    PermissionRouting = $permissionRouting
+    DynamicUiRoutingReady = [bool]$dynamicUiRoutingReady
     RuntimePermissionSelection = 'NOT OBSERVED: this config assessment cannot see a task-level UI override; inspect activePermissionProfile or authoritative task permission metadata.'
     ManagedLeastPrivilegeProfile = [bool]$managedProfile
     LegacySettings = $legacy
@@ -122,7 +133,7 @@ if ($AsJson) {
 Write-Output 'Codex Safe Setup - read-only assessment'
 Write-Output ("Config: {0}" -f $resolvedConfig)
 Write-Output ("Configured default Full Access: {0}" -f $report.ConfiguredDefaultFullAccess)
-Write-Output ("Permission profile: {0}" -f $(if ($report.PermissionProfile) { $report.PermissionProfile } else { '<not set>' }))
+Write-Output ("Permission routing: {0}; default profile: {1}" -f $report.PermissionRouting, $(if ($report.PermissionProfile) { $report.PermissionProfile } else { '<not set>' }))
 Write-Output ("Approval: {0} / reviewer: {1}" -f $(if ($report.ApprovalPolicy) { $report.ApprovalPolicy } else { '<not set>' }), $(if ($report.ApprovalReviewer) { $report.ApprovalReviewer } else { '<not set>' }))
 Write-Output ("Command network: {0}; proxy: {1}; route: {2}" -f $report.CommandNetworkEnabled, $report.NetworkProxyEnabled, $report.CommandNetworkRoute)
 Write-Output ("Windows sandbox setup: {0} - {1}" -f $sandboxSetupHealth.Status, $sandboxSetupHealth.Evidence)

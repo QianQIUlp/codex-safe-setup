@@ -1,6 +1,6 @@
 {
   "name": "codex-safe-setup",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Audit and install a least-privilege, recoverable local Codex configuration.",
   "author": {
     "name": "QianQIUlp and Codex Safe Setup Contributors",
@@ -14,7 +14,7 @@
   "interface": {
     "displayName": "Codex Safe Setup",
     "shortDescription": "Install verified, bounded Codex autonomy.",
-    "longDescription": "Installs a least-privilege default while preserving explicit task-level Full Access overrides, rollback, and optional recovery checkpoints.",
+    "longDescription": "Installs reversible Codex permission routing: DynamicUi enables same-task next-message Full Access switching, while StrictProfile retains stronger credential deny-read controls.",
     "developerName": "QianQIUlp and contributors",
     "category": "Developer Tools",
     "capabilities": ["Interactive", "Write"],

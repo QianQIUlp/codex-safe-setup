@@ -69,7 +69,7 @@ foreach ($entry in $utf8Sentinels.GetEnumerator()) {
 $manifestText = [IO.File]::ReadAllText($manifestPath)
 $manifest = $manifestText | ConvertFrom-Json
 Assert-True ($manifest.name -eq 'codex-safe-setup') 'Plugin name must remain codex-safe-setup.'
-Assert-True ($manifest.version -eq '0.1.5') 'Release package must use version 0.1.5.'
+Assert-True ($manifest.version -eq '0.1.6') 'Release package must use version 0.1.6.'
 Assert-True ($manifest.version -match '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$') 'Plugin version must be strict semver.'
 Assert-True (-not [string]::IsNullOrWhiteSpace($manifest.description)) 'Plugin description is required.'
 Assert-True (-not [string]::IsNullOrWhiteSpace($manifest.author.name)) 'Plugin author name is required.'
@@ -105,8 +105,11 @@ Assert-True ($skillText -match 'prompt injection') 'Skill must disclose prompt-i
 Assert-True ($skillText -match 'malware or vulnerable dependencies') 'Skill must disclose download and dependency risk before unrestricted networking.'
 Assert-True ($skillText -match 'Allowlist.*filtering proxy') 'Skill must preserve proxy-enforced domain filtering for Allowlist mode.'
 Assert-True ($skillText -match 'Unrestricted.*disables the proxy.*SSH') 'Skill must define Unrestricted as direct networking for native protocols.'
-Assert-True ($skillText -match 'default_permissions.*fallback') 'Skill must treat the managed profile as a default, not an override lock.'
-Assert-True ($skillText -match 'Full Access.*:danger-full-access') 'Skill must require explicit UI Full Access to produce the built-in full-access profile.'
+Assert-True ($skillText -match 'DynamicUi.*default_permissions') 'Skill must define DynamicUi as the unpinned permission route.'
+Assert-True ($skillText -match 'next user message without restarting Codex') 'Skill must require same-task next-message permission routing.'
+Assert-True ($skillText -match 'legacy workspace semantics') 'Skill must disclose the DynamicUi read-scope tradeoff.'
+Assert-True ($skillText -match 'StrictProfile') 'Skill must retain the strict deny-read alternative.'
+Assert-True ($skillText -match 'Full Access.*dangerFullAccess') 'Skill must require Full Access to produce the effective dangerFullAccess sandbox.'
 Assert-True ($skillText -match 'activePermissionProfile') 'Skill must verify task-level permission provenance rather than UI appearance.'
 Assert-True ($skillText -match 'codexsandboxonline.*codexsandboxoffline') 'Skill must reject sandbox account names as permission evidence.'
 Assert-True ($skillText -match 'native Git') 'Skill must preserve ordinary Git in a true Full Access task.'

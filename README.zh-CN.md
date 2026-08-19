@@ -46,7 +46,9 @@ codex plugin add codex-safe-setup@codex-safe-setup
 
 0.1.1 的 `Unrestricted` 用户必须执行 0.1.2 配置迁移：旧版通配符代理并不能让原生 SSH 等直连协议联网。迁移会关闭过滤代理并删除通配符域名表。若保留的是无限制联网和 Windows `Elevated`，仍需重新确认相应风险与一次管理员设置提示。
 
-0.1.5 恢复简单权限模型：codex-safe-workspace 只是日常默认；当用户在 Codex UI 中临时选择 Full Access 时，该任务必须真正激活 :danger-full-access。本版移除 Status/Commit Git 桥接；经验证的 Full Access 任务直接使用原生 Git。Save/List 恢复检查点仍可选使用。
+0.1.5 恢复了原生 Git 并移除了 Status/Commit 桥接，但命名默认权限仍可能把 Desktop 任务固定在旧路由上。
+
+0.1.6 提供两条明确路线。默认 `DynamicUi` 会移除插件写入的 `default_permissions` 和命名权限固定，保留已有 UI 沙盒选择，使 Full Access、Workspace、Read-only 在同一任务的下一条用户消息生效。`StrictProfile` 保留根目录拒读、凭据文件拒读和代理白名单，适合把这些边界置于纯动态切换之前的场景。
 
 如果你以前是手动复制 `~/.codex/skills/secure-codex-setup`，而不是通过 marketplace 安装插件，请先把旧目录可恢复地移出技能发现路径，再添加 GitHub marketplace、安装 `codex-safe-setup` 并新建任务。不要让独立旧副本和插件副本同时被发现。
 
@@ -80,14 +82,14 @@ Windows 上还会分别询问是否安装 PowerShell 7、Codex CLI，以及是�
 
 ## 它建立的控制
 
-- 用命名权限配置拒绝文件系统根目录，只保留最小运行时读取，并把写入限制到已登记工作区。
-- 默认拒绝工作区中的 `.env`、私钥、npm 凭据、云凭据等常见敏感文件。
+- 默认安装 DynamicUi，让任务 UI 对 Full Access、Workspace、Read-only 的修改在下一条消息生效，无需重启 Codex。
+- 需要根目录拒读和常见凭据文件拒读时，可明确选择 StrictProfile。
 - 明确选择离线、由代理强制执行的域名白名单，或关闭代理的直连无限制联网。
 - 保留 Codex 对 `.git`、`.codex`、`.agents` 的保护。
 - 可选安装只提供 Save/List 的窄恢复检查点桥接，不替代原生 Git 的 status 或 commit。
 - 备份每个受管理文件，并生成精确回滚命令。
 
-安装器不会默默混用新版 permission profiles 与旧版 sandbox 设置。迁移旧设置必须明确同意，而且会先完整备份。
+DynamicUi 使用旧版 workspace 读取语义：它仍能限制写入和命令联网，但不能执行 StrictProfile 的凭据拒读规则。安装器会先披露并要求确认这一取舍。DynamicUi 支持 Off 和 Unrestricted；必须使用代理白名单时选择 StrictProfile。所有写入前都会备份。
 
 ## 它没有控制的范围
 
@@ -104,7 +106,7 @@ Web Search、Browser、Computer Use、App、Connector、其他 Plugin、MCP、�
 - `FAIL`：必要条件缺失或互相冲突。
 - `NOT CONTROLLED`：属于其他控制面。
 
-配置检查和 codex execpolicy check 只是证据，不能证明当前任务的实际权限。安装后，Custom / 自定义中的 codex-safe-workspace 是日常默认。如果你在 UI 中明确选择 Full Access，该任务必须回报 activePermissionProfile.id = :danger-full-access（或等价的权威运行时元数据）。codexsandboxonline/offline 账户名不是权限证据。真正的 Full Access 任务直接使用原生 Git。Windows 上更改机器配置后需重启 Codex 并新建任务；只有管理员提示反复出现时，才需完整退出所有 Codex 桌面窗口和 CLI 进程后再重启。
+配置检查和 codex execpolicy check 只是证据，不能证明当前任务的实际权限。机器配置变更后先新建一个任务完成加载；之后在同一任务中选择 Full Access 并发送下一条消息，必须看到 `sandboxPolicy.type = dangerFullAccess`。再切回 Workspace 或 Read-only 并发送消息，下一回合必须采用对应沙盒；这些 UI 切换不需要重启 Codex。codexsandboxonline/offline 账户名不是权限证据，真正的 Full Access 直接使用原生 Git。
 
 运行时验证必须匹配模式：`Off` 要证明可达目标被阻断；`Allowlist` 要证明白名单目标经代理成功、未列出目标失败；`Unrestricted` 要用直连 TCP 或原生 OpenSSH 成功，代理横幅不能作为直连证据。
 

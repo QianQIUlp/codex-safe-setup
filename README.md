@@ -50,7 +50,9 @@ The upgrade first shows the prior and requested approval, network, Windows sandb
 
 Version 0.1.2 requires this configuration migration for 0.1.1 `Unrestricted` users because the old wildcard proxy representation did not provide native direct networking. The migration disables the filtering proxy and removes the wildcard domain table. The same unrestricted-network risk acknowledgement and Windows administrator-setup acknowledgement remain required when those preserved choices apply.
 
-Version 0.1.5 restores the simple permission model: codex-safe-workspace remains the normal default, while an explicit Full Access choice in the Codex UI must activate :danger-full-access for that task. The release removes the alternate Status/Commit Git bridge; native Git is used in verified Full Access tasks. Existing Save/List recovery checkpoints remain available.
+Version 0.1.5 restored native Git and removed the alternate Status/Commit bridge, but its named default profile could still pin Desktop tasks.
+
+Version 0.1.6 adds two explicit routes. `DynamicUi` is the default: it removes the plugin-owned `default_permissions` and named-profile pin, preserves an existing UI sandbox choice, and makes Full Access, Workspace, and Read-only changes effective on the next user message in the same task. `StrictProfile` retains root deny-read, credential deny-globs, and proxy allowlists when those controls matter more than pure same-task switching.
 
 If you manually copied the old standalone `~/.codex/skills/secure-codex-setup` folder instead of installing the marketplace plugin, move that folder to a recoverable backup outside skill discovery, add the GitHub marketplace, install `codex-safe-setup`, and start a new task. Keeping the standalone copy discoverable would expose two independently versioned skills.
 
@@ -84,14 +86,14 @@ On Windows, the setup separately asks whether to install PowerShell 7 and Codex 
 
 ## What it changes
 
-- Creates a named permission profile that denies filesystem root access, allows only minimal runtime reads, and limits writes to registered workspace roots.
-- Denies common credential-bearing files such as `.env`, private keys, npm credentials, and cloud credential files inside the workspace.
+- Installs DynamicUi routing by default so the task UI can change Full Access, Workspace, or Read-only for the next message without restarting Codex.
+- Offers StrictProfile when filesystem root deny-read and common credential-file deny-globs are required.
 - Explicitly selects offline, proxy-enforced allowlist, or direct unrestricted command networking.
 - Preserves Codex protections for `.git`, `.codex`, and `.agents`.
 - Optionally installs a narrow, pinned Save/List recovery bridge that never acts as an alternate status or commit backend.
 - Backs up every managed file and provides an exact rollback command.
 
-The installer refuses to mix modern permission profiles silently with legacy sandbox settings. Migration requires explicit consent and a backup is taken first. Existing installations must use the dedicated upgrade path so active state is never silently overwritten.
+DynamicUi uses legacy workspace semantics: it can constrain writes and command networking, but it cannot enforce StrictProfile's credential deny-read globs. The installer discloses that tradeoff and requires acknowledgement. DynamicUi supports Off and Unrestricted; choose StrictProfile when a proxy-enforced Allowlist is mandatory. Every apply is backed up, and existing installations use the dedicated upgrade path.
 
 ## What it does not control
 
@@ -108,7 +110,7 @@ The skill reports each control as:
 - `FAIL`: a required condition is missing or contradictory.
 - `NOT CONTROLLED`: the capability belongs to another control surface.
 
-Static configuration and codex execpolicy checks are evidence, not proof of the active task. After installation, Custom with codex-safe-workspace is the normal default. If you explicitly select Full Access in the UI, the task must report activePermissionProfile.id as :danger-full-access (or authoritative danger-full-access runtime metadata). The codexsandboxonline/offline username is not permission evidence. In a verified Full Access task, use native Git normally. On Windows, restart Codex and start a new task after a machine-configuration change; repeated administrator prompts require fully quitting every Codex desktop window and CLI process before one clean relaunch.
+Static configuration and codex execpolicy checks are evidence, not proof of the active task. After one fresh task loads a DynamicUi machine-configuration change, select Full Access and send the next user message: the same task must report `sandboxPolicy.type = dangerFullAccess`. Switch back to Workspace or Read-only and send another message; that following turn must report the matching sandbox. These UI changes require no Codex restart. The codexsandboxonline/offline username is not permission evidence, and verified Full Access uses native Git normally.
 
 Runtime verification is mode-specific: `Off` must block a known-reachable endpoint; `Allowlist` must allow one configured domain through the proxy and block one unlisted domain; `Unrestricted` must pass a direct TCP or native OpenSSH probe. A successful SOCKS/HTTP proxy probe is not proof of direct unrestricted networking.
 

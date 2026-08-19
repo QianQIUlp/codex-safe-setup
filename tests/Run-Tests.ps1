@@ -81,20 +81,20 @@ unified_exec = true
     [IO.File]::WriteAllText($configPath, $originalConfig, [Text.UTF8Encoding]::new($false))
 
     $legacyRefused = $false
-    try { & $installScript -ApprovalMode AskMe -NetworkMode Off -WindowsSandbox Keep -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -PlanOnly | Out-Null } catch { $legacyRefused = $true }
+    try { & $installScript -PermissionRouting StrictProfile -ApprovalMode AskMe -NetworkMode Off -WindowsSandbox Keep -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -PlanOnly | Out-Null } catch { $legacyRefused = $true }
     Assert-True $legacyRefused 'Installer must refuse conflicting legacy settings without explicit migration consent.'
     Assert-True ([IO.File]::ReadAllText($configPath) -eq $originalConfig) 'A refused migration must not modify configuration.'
 
     $domainInjectionRefused = $false
-    try { & $installScript -NetworkMode Allowlist -AllowedDomain 'example.com" = "allow' -WindowsSandbox Keep -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -MigrateLegacySettings -PlanOnly | Out-Null } catch { $domainInjectionRefused = $true }
+    try { & $installScript -PermissionRouting StrictProfile -NetworkMode Allowlist -AllowedDomain 'example.com" = "allow' -WindowsSandbox Keep -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -MigrateLegacySettings -PlanOnly | Out-Null } catch { $domainInjectionRefused = $true }
     Assert-True $domainInjectionRefused 'Installer must reject malformed or injectable domain values.'
     $domainModeGuardPassed = $true
     foreach ($mode in @('Off', 'Unrestricted')) {
-        try { & $installScript -NetworkMode $mode -AllowedDomain 'example.com' -WindowsSandbox Keep -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -MigrateLegacySettings -PlanOnly | Out-Null; $domainModeGuardPassed = $false } catch {}
+        try { & $installScript -PermissionRouting StrictProfile -NetworkMode $mode -AllowedDomain 'example.com' -WindowsSandbox Keep -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -MigrateLegacySettings -PlanOnly | Out-Null; $domainModeGuardPassed = $false } catch {}
     }
     Assert-True $domainModeGuardPassed 'Domain rules must be accepted only in Allowlist mode.'
 
-    $unrestrictedPlan = @(& $installScript -NetworkMode Unrestricted -WindowsSandbox Keep -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -MigrateLegacySettings -PlanOnly) -join [Environment]::NewLine
+    $unrestrictedPlan = @(& $installScript -PermissionRouting StrictProfile -NetworkMode Unrestricted -WindowsSandbox Keep -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -MigrateLegacySettings -PlanOnly) -join [Environment]::NewLine
     Assert-True ($unrestrictedPlan -match 'does not expand filesystem permissions or add deletion authority') 'Unrestricted plan must explain that network access does not widen filesystem authority.'
     Assert-True ($unrestrictedPlan -match 'prompt injection') 'Unrestricted plan must disclose prompt-injection risk before acknowledgement.'
     Assert-True ($unrestrictedPlan -match 'any public Internet destination') 'Unrestricted plan must disclose the loss of destination containment.'
@@ -102,7 +102,7 @@ unified_exec = true
     Assert-True ($unrestrictedPlan -match 'SSH') 'Unrestricted plan must explain that native direct protocols are enabled.'
 
     $unrestrictedRefused = $false
-    try { & $installScript -NetworkMode Unrestricted -WindowsSandbox Keep -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -MigrateLegacySettings -ConfirmApply -NonInteractive | Out-Null } catch { $unrestrictedRefused = $true }
+    try { & $installScript -PermissionRouting StrictProfile -NetworkMode Unrestricted -WindowsSandbox Keep -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -MigrateLegacySettings -ConfirmApply -NonInteractive | Out-Null } catch { $unrestrictedRefused = $true }
     Assert-True $unrestrictedRefused 'Non-interactive unrestricted networking must require -AcknowledgeRisk.'
     Assert-True ([IO.File]::ReadAllText($configPath) -eq $originalConfig) 'A refused unrestricted-network acknowledgement must not modify configuration.'
     $staleNetworkConfig = @(
@@ -124,7 +124,7 @@ unified_exec = true
     [IO.File]::WriteAllText($offConfigPath, $staleNetworkConfig, [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText($directConfigPath, $staleNetworkConfig, [Text.UTF8Encoding]::new($false))
 
-    & $installScript -NetworkMode Off -WindowsSandbox Keep -CodexHome $offHome -ConfigPath $offConfigPath -StateRoot (Join-Path $offHome 'safe-setup') -ConfirmApply -NonInteractive | Out-Null
+    & $installScript -PermissionRouting StrictProfile -NetworkMode Off -WindowsSandbox Keep -CodexHome $offHome -ConfigPath $offConfigPath -StateRoot (Join-Path $offHome 'safe-setup') -ConfirmApply -NonInteractive | Out-Null
     $offConfig = [IO.File]::ReadAllText($offConfigPath)
     $offNetwork = Get-CssTomlSectionText -Text $offConfig -Section 'permissions.codex-safe-workspace.network'
     $offDomains = Get-CssTomlSectionText -Text $offConfig -Section 'permissions.codex-safe-workspace.network.domains'
@@ -138,7 +138,7 @@ unified_exec = true
     $offNetworkCheck = @($offVerification.Checks | Where-Object Control -eq 'Command network configuration')
     Assert-True ($offNetworkCheck.Count -eq 1 -and $offNetworkCheck[0].Status -eq 'PASS') 'Verifier must accept the complete offline configuration.'
 
-    & $installScript -NetworkMode Unrestricted -WindowsSandbox Keep -CodexHome $directHome -ConfigPath $directConfigPath -StateRoot (Join-Path $directHome 'safe-setup') -AcknowledgeRisk -ConfirmApply -NonInteractive | Out-Null
+    & $installScript -PermissionRouting StrictProfile -NetworkMode Unrestricted -WindowsSandbox Keep -CodexHome $directHome -ConfigPath $directConfigPath -StateRoot (Join-Path $directHome 'safe-setup') -AcknowledgeRisk -ConfirmApply -NonInteractive | Out-Null
     $directConfig = [IO.File]::ReadAllText($directConfigPath)
     $directNetwork = Get-CssTomlSectionText -Text $directConfig -Section 'permissions.codex-safe-workspace.network'
     $directDomains = Get-CssTomlSectionText -Text $directConfig -Section 'permissions.codex-safe-workspace.network.domains'
@@ -154,7 +154,7 @@ unified_exec = true
     Assert-True ($directNetworkCheck.Count -eq 1 -and $directNetworkCheck[0].Status -eq 'PASS') 'Verifier must accept direct unrestricted networking only when the proxy and domain table are absent.'
     $directState = Get-Content -LiteralPath (Join-Path $directHome 'safe-setup\install-state.json') -Raw | ConvertFrom-Json
     Assert-True (@($directState.AllowedDomains).Count -eq 0) 'Unrestricted install state must not retain domain allow rules.'
-    Assert-True ($directState.schemaVersion -eq 4 -and $directState.productVersion -eq '0.1.5') 'New installs must record the current state schema and product version.'
+    Assert-True ($directState.schemaVersion -eq 5 -and $directState.productVersion -eq '0.1.6') 'New installs must record the current state schema and product version.'
 
     $upgradeHome = Join-Path $temporaryRoot 'upgrade-home'
     $upgradeStateRoot = Join-Path $upgradeHome 'safe-setup'
@@ -162,7 +162,7 @@ unified_exec = true
     New-Item -ItemType Directory -Path $upgradeHome -Force | Out-Null
     $upgradeOriginalConfig = "model = `"upgrade-test`"$([Environment]::NewLine)"
     [IO.File]::WriteAllText($upgradeConfigPath, $upgradeOriginalConfig, [Text.UTF8Encoding]::new($false))
-    & $installScript -NetworkMode Off -WindowsSandbox Keep -CodexHome $upgradeHome -ConfigPath $upgradeConfigPath -StateRoot $upgradeStateRoot -ConfirmApply -NonInteractive | Out-Null
+    & $installScript -PermissionRouting StrictProfile -NetworkMode Off -WindowsSandbox Keep -CodexHome $upgradeHome -ConfigPath $upgradeConfigPath -StateRoot $upgradeStateRoot -ConfirmApply -NonInteractive | Out-Null
 
     $legacyConfig = [IO.File]::ReadAllText($upgradeConfigPath)
     $legacyConfig = $legacyConfig -replace '(?m)^network_proxy = false\r?$', 'network_proxy = true'
@@ -177,7 +177,7 @@ unified_exec = true
     [IO.File]::WriteAllText($legacyStatePath, ($legacyState | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
 
     $plainReinstallRefused = $false
-    try { & $installScript -NetworkMode Unrestricted -WindowsSandbox Keep -CodexHome $upgradeHome -ConfigPath $upgradeConfigPath -StateRoot $upgradeStateRoot -AcknowledgeRisk -PlanOnly | Out-Null } catch { $plainReinstallRefused = $true }
+    try { & $installScript -PermissionRouting StrictProfile -NetworkMode Unrestricted -WindowsSandbox Keep -CodexHome $upgradeHome -ConfigPath $upgradeConfigPath -StateRoot $upgradeStateRoot -AcknowledgeRisk -PlanOnly | Out-Null } catch { $plainReinstallRefused = $true }
     Assert-True $plainReinstallRefused 'A first-install invocation must not overwrite existing install state.'
 
     $upgradePlan = @(& $upgradeScript -CodexHome $upgradeHome -ConfigPath $upgradeConfigPath -StateRoot $upgradeStateRoot -PlanOnly) -join [Environment]::NewLine
@@ -191,7 +191,7 @@ unified_exec = true
     Assert-True ($upgradedConfig -match '(?m)^network_proxy = false\r?$') 'Upgrade must disable the old wildcard filtering proxy for direct unrestricted networking.'
     Assert-True ($upgradedConfig -notmatch '(?m)^\s*"\*"\s*=\s*"allow"') 'Upgrade must remove the old wildcard domain rule.'
     $upgradedState = Get-Content -LiteralPath $legacyStatePath -Raw | ConvertFrom-Json
-    Assert-True ($upgradedState.schemaVersion -eq 4 -and $upgradedState.productVersion -eq '0.1.5' -and $upgradedState.operation -eq 'Upgrade') 'Upgrade must write schema-versioned state.'
+    Assert-True ($upgradedState.schemaVersion -eq 5 -and $upgradedState.productVersion -eq '0.1.6' -and $upgradedState.operation -eq 'Upgrade') 'Upgrade must write schema-versioned state.'
     Assert-True ($upgradedState.previousStateSnapshot -and (Test-Path -LiteralPath $upgradedState.previousStateSnapshot -PathType Leaf)) 'Upgrade must retain an immutable previous-state snapshot.'
     Assert-True ([IO.Path]::GetFullPath($upgradedState.ConfigBackup).StartsWith([IO.Path]::GetFullPath((Join-Path $upgradeStateRoot 'backups')), [StringComparison]::OrdinalIgnoreCase)) 'Upgrade backup must stay under the transaction backup root.'
 
@@ -214,16 +214,15 @@ unified_exec = true
     Invoke-GitTest -Repository $primaryRepository -GitArguments @('worktree', 'add', '-b', 'codex/recovery-test', $repository) | Out-Null
     $commonGitDirectory = (Invoke-GitTest -Repository $repository -GitArguments @('rev-parse', '--git-common-dir') | Select-Object -First 1).Trim()
     Assert-True ($commonGitDirectory -match '[\\/]\.git$') 'Linked-worktree test must use the primary repository shared Git directory.'
-    $installResult = @(& $installScript -ApprovalMode AskMe -NetworkMode Allowlist -AllowedDomain 'example.com' -WindowsSandbox Keep -WorkspacePath $repository -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -MigrateLegacySettings -ConfirmApply -NonInteractive)
+    $installResult = @(& $installScript -PermissionRouting StrictProfile -ApprovalMode AskMe -NetworkMode Allowlist -AllowedDomain 'example.com' -WindowsSandbox Keep -WorkspacePath $repository -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -MigrateLegacySettings -ConfirmApply -NonInteractive)
     $installSummary = @($installResult | Where-Object { $_.PSObject.Properties['Status'] } | Select-Object -Last 1)
     Assert-True ($installSummary.Count -eq 1) 'Installer must return a structured completion summary.'
-    Assert-True ($installSummary[0].RequiredPermissionSelection -match 'normal default') 'Completion summary must identify the managed profile as the default rather than an override lock.'
-    Assert-True ($installSummary[0].RequiredPermissionSelection -match 'codex-safe-workspace') 'Completion summary must name the custom default profile.'
-    Assert-True ($installSummary[0].RequiredPermissionSelection -match 'Full Access') 'Completion summary must explain the explicit UI override.'
-    Assert-True ($installSummary[0].RequiredPermissionSelection -match ':danger-full-access') 'Completion summary must name the expected effective Full Access profile.'
+    Assert-True ($installSummary[0].RequiredPermissionSelection -match 'StrictProfile') 'Completion summary must identify the strict routing mode.'
+    Assert-True ($installSummary[0].RequiredPermissionSelection -match 'codex-safe-workspace') 'Completion summary must name the strict custom profile.'
+    Assert-True ($installSummary[0].RequiredPermissionSelection -match 'deny-read controls') 'Completion summary must distinguish strict protection from DynamicUi.'
     Assert-True (-not $installSummary[0].PSObject.Properties['GitCommitBridgeEnabled']) 'Installer must not expose an alternate normal-commit backend.'
     if ($env:OS -eq 'Windows_NT') {
-        Assert-True ($installSummary[0].RequiredRestart -match 'Restart Codex and start a new task') 'Windows activation must require a restart and fresh task.'
+        Assert-True ($installSummary[0].RequiredRestart -match 'Start one fresh task') 'Windows activation must require one fresh task after a machine-configuration change.'
         Assert-True ($installSummary[0].RequiredRestart -match 'fully quit every Codex desktop window and CLI process') 'Repeated prompts must escalate to a complete process shutdown.'
     }
 
@@ -328,6 +327,8 @@ unified_exec = true
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $stateRoot 'bin\New-CodexCheckpoint.ps1'))) 'Rollback must remove a newly installed bridge.'
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $stateRoot 'authorized-workspaces.json'))) 'Rollback must remove a newly created workspace registry.'
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $stateRoot 'outside-workspace-canary.txt'))) 'Rollback must remove a newly created synthetic canary.'
+
+    & (Join-Path $PSScriptRoot 'Test-DynamicPermissionRouting.ps1')
 
     Write-Output 'PASS: configuration migration and preservation'
     Write-Output 'PASS: read-only assessment classification'

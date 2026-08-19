@@ -10,11 +10,14 @@
 
 Auto-review is a reviewer substitution. It does not alter filesystem, network, protected-path, or workspace limits.
 
-## Default and task-level selection
+## Permission routing
 
-default_permissions selects the fallback profile for tasks that do not make an explicit selection. It is not a managed restriction on the Codex UI. An explicit Full Access selection must activate the built-in :danger-full-access profile for that task; verify activePermissionProfile.id or authoritative danger-full-access task metadata.
+| Installer value | Persisted configuration | Same-task UI switching | Read boundary |
+|---|---|---|---|
+| `DynamicUi` | `sandbox_mode` plus `sandbox_workspace_write`; no `default_permissions` or plugin-owned named profile | Full Access, Workspace, and Read-only apply to the next user message | Legacy workspace semantics: broad reads, workspace-scoped writes |
+| `StrictProfile` | `default_permissions = "codex-safe-workspace"` and the named profile | Not the pure dynamic route | Root deny-read, minimal runtime reads, credential deny-globs |
 
-Do not infer permission scope from the Windows sandbox username. codexsandboxonline and codexsandboxoffline distinguish sandbox/network variants, not Full Access versus workspace access. If the UI and runtime metadata disagree, report an activation failure instead of widening workspace roots or adding a Git backend.
+DynamicUi is the 0.1.6 default and requires `-AcknowledgeDynamicUiReadScope`. After one fresh task loads a machine-configuration change, `thread/settings/updated` must report `sandboxPolicy.type = dangerFullAccess` after Full Access is selected, then `workspaceWrite` or `readOnly` after switching back. Do not infer permission scope from codexsandboxonline or codexsandboxoffline.
 
 ## Command-network modes
 
@@ -26,11 +29,13 @@ Do not infer permission scope from the Windows sandbox username. codexsandboxonl
 
 A domain table without an active proxy is not an enforced allowlist.
 
-The installer must write both network switches explicitly:
+The installer writes network switches for the selected route:
 
-- `Off`: `permissions.codex-safe-workspace.network.enabled = false` and `features.network_proxy = false`.
-- `Allowlist`: network enabled, proxy enabled, and explicit domain rules.
-- `Unrestricted`: network enabled, proxy disabled, and no domain table.
+- DynamicUi `Off`: `sandbox_workspace_write.network_access = false` and proxy disabled.
+- DynamicUi `Unrestricted`: network enabled and proxy disabled.
+- StrictProfile `Off`, `Allowlist`, and `Unrestricted`: use the named profile plus the matching proxy state.
+
+DynamicUi rejects Allowlist because the persistent proxy would contradict pure Full Access.
 
 This distinction is functional, not cosmetic. A wildcard rule still routes commands through the proxy, and proxy-unaware native clients such as OpenSSH do not thereby gain direct connectivity.
 
@@ -48,8 +53,8 @@ This matches OpenAI's documented internet-access risks and its recommendation to
 
 ## Filesystem policy
 
-The managed profile extends `:workspace`, denies `:root`, permits `:minimal` reads, permits workspace-root writes, optionally denies temp directories, and denies common credential-file globs. It inherits Codex protections for `.git`, `.codex`, and `.agents`.
+StrictProfile extends `:workspace`, denies `:root`, permits `:minimal` reads and workspace-root writes, and denies common credential-file globs. DynamicUi deliberately uses the older workspace sandbox so the Desktop can replace the sandbox for subsequent turns; it cannot claim StrictProfile's deny-read protection.
 
-Permission profiles are Beta. The installer refuses to combine them silently with legacy `sandbox_mode` or `[sandbox_workspace_write]`. Use `-MigrateLegacySettings` only after review; the original file is backed up first.
+Permission profiles are Beta. Version 0.1.6 keeps the two routes mutually exclusive and backs up the original file before migration.
 
 Base installation can proceed without Codex CLI, but exact version and rule behavior remain partially verified. A complete result requires a compatible CLI and successful `codex execpolicy check`.

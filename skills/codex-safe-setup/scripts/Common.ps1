@@ -1,7 +1,7 @@
 Set-StrictMode -Version Latest
 
-$script:CssStateSchemaVersion = 4
-$script:CssProductVersion = '0.1.5'
+$script:CssStateSchemaVersion = 5
+$script:CssProductVersion = '0.1.6'
 $script:CssManagedStart = '# >>> codex-safe-setup managed >>>'
 $script:CssManagedEnd = '# <<< codex-safe-setup managed <<<'
 $script:CssProfileName = 'codex-safe-workspace'
@@ -151,6 +151,44 @@ function Remove-CssTomlTopLevelKeys {
         $resultLines.Add($line)
     }
     return ($resultLines -join [Environment]::NewLine).TrimEnd() + [Environment]::NewLine
+}
+
+function Remove-CssTomlSectionKeys {
+    param(
+        [AllowEmptyString()][string]$Text,
+        [Parameter(Mandatory)][string]$Section,
+        [Parameter(Mandatory)][string[]]$Keys
+    )
+
+    $keySet = @{}
+    foreach ($key in $Keys) { $keySet[$key] = $true }
+    $currentSection = ''
+    $resultLines = [Collections.Generic.List[string]]::new()
+    foreach ($line in [regex]::Split($Text, '\r?\n')) {
+        $parsedSection = Get-CssTomlSectionName -Line $line
+        if ($null -ne $parsedSection) {
+            $currentSection = $parsedSection
+            $resultLines.Add($line)
+            continue
+        }
+        if ($currentSection -eq $Section -and $line -match '^\s*([A-Za-z0-9_.-]+)\s*=') {
+            if ($keySet.ContainsKey($Matches[1])) { continue }
+        }
+        $resultLines.Add($line)
+    }
+    return ($resultLines -join [Environment]::NewLine).TrimEnd() + [Environment]::NewLine
+}
+
+function Get-CssPermissionProfileSettings {
+    param([AllowEmptyString()][string]$Text)
+
+    $defaultMatch = [regex]::Match($Text, '(?m)^\s*default_permissions\s*=\s*["'']([^"'']+)["'']')
+    $managedProfilePresent = $Text -match '(?m)^\s*\[permissions\.codex-safe-workspace(?:\.|\])'
+    return [pscustomobject]@{
+        DefaultPresent = [bool]$defaultMatch.Success
+        DefaultProfile = $(if ($defaultMatch.Success) { $defaultMatch.Groups[1].Value } else { $null })
+        ManagedProfilePresent = [bool]$managedProfilePresent
+    }
 }
 
 function Remove-CssTomlSections {

@@ -23,7 +23,7 @@ Approval is deliberately treated as a separate workflow decision. A person or re
 
 | Boundary | Trusted for | Not assumed |
 |---|---|---|
-| Codex permission profile | Enforcing declared filesystem and command-network limits | Absence of implementation defects |
+| Codex permission route | Enforcing the selected DynamicUi or StrictProfile boundary | Absence of implementation defects or client/runtime mismatch |
 | Operating system sandbox | Isolating local command execution | Protection after host compromise |
 | User approval | Expressing intent for a specific crossing | Perfect review or complete context |
 | Auto-review agent | Applying review policy | Stronger isolation or infallible judgment |
@@ -35,11 +35,11 @@ Approval is deliberately treated as a separate workflow decision. A person or re
 
 | Threat | Primary control | Residual risk |
 |---|---|---|
-| Wrong path outside the project | Deny root; allow writes only to registered workspace roots | Sandbox defects or separately authorized tools |
+| Wrong-path writes outside the project | DynamicUi workspace fallback or StrictProfile workspace roots | DynamicUi allows broad reads; sandbox defects or separate tools remain |
 | Accidental deletion inside the project | Hidden Git checkpoint ref | Ignored files and sensitive refused files are absent |
-| Reading credentials outside the project | Root deny plus minimal runtime reads | The runtime-defined minimal set must be trusted |
-| UI Full Access selection does not match runtime | Verify activePermissionProfile or authoritative task metadata; fail closed on mismatch | A verified Full Access task intentionally removes the local sandbox boundary |
-| Reading credentials inside the project | Deny globs for common sensitive names | Unusual filenames require additional deny rules |
+| Reading credentials outside the project | StrictProfile root deny plus minimal runtime reads | DynamicUi intentionally does not provide this read boundary |
+| UI Full Access selection does not match runtime | DynamicUi verifies same-thread `sandboxPolicy.type = dangerFullAccess`; StrictProfile verifies profile metadata | A verified Full Access task intentionally removes the local sandbox boundary |
+| Reading credentials inside the project | StrictProfile deny globs for common sensitive names | DynamicUi cannot enforce them; unusual filenames require more rules |
 | Shell-based data exfiltration | Network off or active proxy allowlist | An allowed domain can still receive data; direct unrestricted access removes destination containment |
 | Prompt injection from network content | Minimize allowed destinations and treat remote instructions as untrusted | Allowed pages, issues, and dependency documentation can still manipulate the agent |
 | Malicious, vulnerable, or restricted downloads | Narrow network access and review dependency/content changes | An allowed source can still be compromised or carry restricted content |
@@ -51,7 +51,7 @@ Approval is deliberately treated as a separate workflow decision. A person or re
 
 ## Credential exposure
 
-Reading a credential can be an exposure event even when the agent never prints it intentionally. A value may enter model context, command output, logs, repository history, or another tool invocation. This project therefore blocks common credential paths instead of relying only on a promise not to use their contents.
+Reading a credential can be an exposure event even when the agent never prints it intentionally. StrictProfile blocks common credential paths. DynamicUi does not claim that protection: it accepts legacy broad-read semantics to make Full Access, Workspace, and Read-only routable within one task.
 
 Enabling unrestricted command networking does not change the filesystem profile or add deletion authority. It disables the filtering proxy and domain enforcement so direct protocols such as SSH can work. This removes the public-destination boundary: data already readable by a sandboxed command can be transmitted to any public destination. Files that are writable inside the workspace remain changeable or deletable regardless of the network choice.
 
@@ -72,7 +72,7 @@ These surfaces must be evaluated separately. The verifier reports them as `NOT C
 
 ## Verification limits
 
-Configuration parsing, file inspection, and `codex execpolicy check` show that the generated policy matches expected structure and decisions. They do not prove that every command, tool, product surface, or future Codex version will enforce it identically. Re-run verification after upgrades and perform runtime probes in a new Codex execution environment. Verify task-level Full Access from activePermissionProfile or authoritative task metadata, never from the Windows sandbox account name.
+Configuration parsing, file inspection, and `codex execpolicy check` show that generated policy matches expected structure. The 0.1.6 integration test also starts app-server and changes one thread from Workspace to Full Access and back, asserting the emitted next-turn settings. Re-run after Codex upgrades. Verify DynamicUi from `sandboxPolicy`, StrictProfile from `activePermissionProfile`, and never infer scope from the Windows sandbox account name.
 
 ## Security non-goals
 

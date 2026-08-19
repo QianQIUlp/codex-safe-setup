@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [ValidateSet('BoundedAutonomy', 'AskMe', 'AutoReview')][string]$ApprovalMode,
+    [ValidateSet('DynamicUi', 'StrictProfile')][string]$PermissionRouting,
     [ValidateSet('Off', 'Allowlist', 'Unrestricted')][string]$NetworkMode,
     [string[]]$AllowedDomain,
     [ValidateSet('Elevated', 'Unelevated', 'Keep')][string]$WindowsSandbox,
@@ -11,6 +12,7 @@ param(
     [string]$ConfigPath,
     [string]$StateRoot,
     [switch]$MigrateLegacySettings,
+    [switch]$AcknowledgeDynamicUiReadScope,
     [switch]$AcknowledgeRisk,
     [switch]$AcknowledgeAdminSetup,
     [switch]$PlanOnly,
@@ -44,6 +46,7 @@ function Get-UpgradeStateValue {
 }
 
 $effectiveApproval = if ($PSBoundParameters.ContainsKey('ApprovalMode')) { $ApprovalMode } else { [string](Get-UpgradeStateValue -Name 'ApprovalMode' -Default 'BoundedAutonomy') }
+$effectivePermissionRouting = if ($PSBoundParameters.ContainsKey('PermissionRouting')) { $PermissionRouting } else { [string](Get-UpgradeStateValue -Name 'PermissionRouting' -Default 'DynamicUi') }
 $effectiveNetwork = if ($PSBoundParameters.ContainsKey('NetworkMode')) { $NetworkMode } else { [string](Get-UpgradeStateValue -Name 'NetworkMode' -Default 'Off') }
 $effectiveWindows = if ($PSBoundParameters.ContainsKey('WindowsSandbox')) { $WindowsSandbox } else { [string](Get-UpgradeStateValue -Name 'WindowsSandbox' -Default 'Keep') }
 $effectiveProtect = if ($PSBoundParameters.ContainsKey('ProtectWorkspaceSecrets')) { [bool]$ProtectWorkspaceSecrets } else { [bool](Get-UpgradeStateValue -Name 'ProtectWorkspaceSecrets' -Default $true) }
@@ -71,6 +74,7 @@ if ($effectiveNetwork -eq 'Allowlist' -and $effectiveDomains.Count -eq 0) {
 $effectiveWorkspace = if ($PSBoundParameters.ContainsKey('WorkspacePath')) { $WorkspacePath } else { [string](Get-UpgradeStateValue -Name 'RegisteredWorkspace' -Default '') }
 $installArguments = @{
     ApprovalMode = $effectiveApproval
+    PermissionRouting = $effectivePermissionRouting
     NetworkMode = $effectiveNetwork
     AllowedDomain = $effectiveDomains
     WindowsSandbox = $effectiveWindows
@@ -88,6 +92,7 @@ elseif ($effectiveWorkspace) {
     throw "The recorded workspace no longer exists: $effectiveWorkspace. Pass an existing -WorkspacePath so the recovery registry can be rewritten; refusing to leave an older bridge rule active."
 }
 if ($MigrateLegacySettings) { $installArguments.MigrateLegacySettings = $true }
+if ($AcknowledgeDynamicUiReadScope) { $installArguments.AcknowledgeDynamicUiReadScope = $true }
 if ($AcknowledgeRisk) { $installArguments.AcknowledgeRisk = $true }
 if ($AcknowledgeAdminSetup) { $installArguments.AcknowledgeAdminSetup = $true }
 
