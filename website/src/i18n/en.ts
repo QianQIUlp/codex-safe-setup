@@ -321,7 +321,7 @@ export const en: UiContent = {
       },
     ],
     caveat: 'Static configuration and codex execpolicy check are evidence, not proof of every future runtime behavior. Re-run verification after Codex upgrades.',
-    restart: 'Restart Codex after installation before runtime probes.',
+    restart: 'Start one new task after installation; later UI permission switches apply on the next message without restarting Codex.',
     checks: {
       label: 'What verification actually checks',
       items: [
@@ -369,7 +369,7 @@ export const en: UiContent = {
         'Separate consent for prerequisites (PowerShell 7, Codex CLI).',
         'Plan-only preview of the exact configuration.',
         'Applied only after your explicit confirmation.',
-        'Static and execpolicy verification; restart Codex afterwards.',
+        'Static and execpolicy verification; start one new task afterwards.',
         'Backups recorded — exact rollback stays available.',
       ],
     },

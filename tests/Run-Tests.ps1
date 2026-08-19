@@ -80,10 +80,10 @@ unified_exec = true
 "@
     [IO.File]::WriteAllText($configPath, $originalConfig, [Text.UTF8Encoding]::new($false))
 
-    $legacyRefused = $false
-    try { & $installScript -ApprovalMode AskMe -NetworkMode Off -WindowsSandbox Keep -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -PlanOnly | Out-Null } catch { $legacyRefused = $true }
-    Assert-True $legacyRefused 'Installer must refuse conflicting legacy settings without explicit migration consent.'
-    Assert-True ([IO.File]::ReadAllText($configPath) -eq $originalConfig) 'A refused migration must not modify configuration.'
+    $legacyPlan = @(& $installScript -ApprovalMode AskMe -NetworkMode Off -WindowsSandbox Keep -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -PlanOnly) -join [Environment]::NewLine
+    Assert-True ($legacyPlan -match 'LegacySandboxSettings.*Preserved') 'Installer must preserve the legacy sandbox route used by task-level UI permission changes.'
+    Assert-True ($legacyPlan -match 'not pinned as the global default') 'Installer plan must describe the selectable, unpinned profile layout.'
+    Assert-True ([IO.File]::ReadAllText($configPath) -eq $originalConfig) 'PlanOnly must not modify configuration.'
 
     $domainInjectionRefused = $false
     try { & $installScript -NetworkMode Allowlist -AllowedDomain 'example.com" = "allow' -WindowsSandbox Keep -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -MigrateLegacySettings -PlanOnly | Out-Null } catch { $domainInjectionRefused = $true }
@@ -154,7 +154,16 @@ unified_exec = true
     Assert-True ($directNetworkCheck.Count -eq 1 -and $directNetworkCheck[0].Status -eq 'PASS') 'Verifier must accept direct unrestricted networking only when the proxy and domain table are absent.'
     $directState = Get-Content -LiteralPath (Join-Path $directHome 'safe-setup\install-state.json') -Raw | ConvertFrom-Json
     Assert-True (@($directState.AllowedDomains).Count -eq 0) 'Unrestricted install state must not retain domain allow rules.'
-    Assert-True ($directState.schemaVersion -eq 2 -and $directState.productVersion -eq '0.1.2') 'New installs must record the current state schema and product version.'
+    Assert-True ($directState.schemaVersion -eq 5 -and $directState.productVersion -eq '0.1.6') 'New installs must record the current state schema and product version.'
+
+    $userDefaultHome = Join-Path $temporaryRoot 'user-default-home'
+    $userDefaultConfigPath = Join-Path $userDefaultHome 'config.toml'
+    New-Item -ItemType Directory -Path $userDefaultHome -Force | Out-Null
+    [IO.File]::WriteAllText($userDefaultConfigPath, "default_permissions = `":read-only`"$([Environment]::NewLine)", [Text.UTF8Encoding]::new($false))
+    & $installScript -NetworkMode Off -WindowsSandbox Keep -CodexHome $userDefaultHome -ConfigPath $userDefaultConfigPath -StateRoot (Join-Path $userDefaultHome 'safe-setup') -ConfirmApply -NonInteractive | Out-Null
+    $preservedUserDefaultConfig = [IO.File]::ReadAllText($userDefaultConfigPath)
+    Assert-True ($preservedUserDefaultConfig -match '(?m)^default_permissions = ":read-only"\r?$') 'Installer must preserve a user-owned default permission profile.'
+    Assert-True ($preservedUserDefaultConfig -notmatch '(?m)^default_permissions = "codex-safe-workspace"$') 'Installer must never replace a user-owned default with the managed profile.'
 
     $upgradeHome = Join-Path $temporaryRoot 'upgrade-home'
     $upgradeStateRoot = Join-Path $upgradeHome 'safe-setup'
@@ -165,6 +174,8 @@ unified_exec = true
     & $installScript -NetworkMode Off -WindowsSandbox Keep -CodexHome $upgradeHome -ConfigPath $upgradeConfigPath -StateRoot $upgradeStateRoot -ConfirmApply -NonInteractive | Out-Null
 
     $legacyConfig = [IO.File]::ReadAllText($upgradeConfigPath)
+    $legacyConfig = Set-CssTomlTopLevelValue -Text $legacyConfig -Key 'default_permissions' -Literal '"codex-safe-workspace"'
+    $legacyConfig = Set-CssTomlTopLevelValue -Text $legacyConfig -Key 'sandbox_mode' -Literal '"danger-full-access"'
     $legacyConfig = $legacyConfig -replace '(?m)^network_proxy = false\r?$', 'network_proxy = true'
     $legacyConfig = $legacyConfig -replace '(?m)^enabled = false\r?\n# <<< codex-safe-setup managed <<<$', ('enabled = true' + [Environment]::NewLine + [Environment]::NewLine + '[permissions.codex-safe-workspace.network.domains]' + [Environment]::NewLine + '"*" = "allow"' + [Environment]::NewLine + '# <<< codex-safe-setup managed <<<')
     [IO.File]::WriteAllText($upgradeConfigPath, $legacyConfig, [Text.UTF8Encoding]::new($false))
@@ -183,6 +194,8 @@ unified_exec = true
     $upgradePlan = @(& $upgradeScript -CodexHome $upgradeHome -ConfigPath $upgradeConfigPath -StateRoot $upgradeStateRoot -PlanOnly) -join [Environment]::NewLine
     Assert-True ($upgradePlan -match 'PreviousNetworkMode\s*:\s*Unrestricted') 'Upgrade plan must display the prior network selection.'
     Assert-True ($upgradePlan -match 'Direct unrestricted network; proxy disabled') 'Legacy unrestricted state must migrate to direct networking.'
+    Assert-True ($upgradePlan -match 'RemovedPinnedDefault\s*:\s*True') 'Upgrade plan must identify the plugin-owned default permission pin.'
+    Assert-True ($upgradePlan -match 'LegacySandboxSettings\s*:\s*Preserved') 'Upgrade plan must preserve the UI sandbox route.'
     Assert-True ($upgradePlan -match 'No files changed') 'Upgrade preview must be non-mutating.'
     Assert-True ([IO.File]::ReadAllText($upgradeConfigPath) -eq $legacyConfig) 'Upgrade preview must preserve the legacy configuration byte-for-byte.'
 
@@ -190,8 +203,10 @@ unified_exec = true
     $upgradedConfig = [IO.File]::ReadAllText($upgradeConfigPath)
     Assert-True ($upgradedConfig -match '(?m)^network_proxy = false\r?$') 'Upgrade must disable the old wildcard filtering proxy for direct unrestricted networking.'
     Assert-True ($upgradedConfig -notmatch '(?m)^\s*"\*"\s*=\s*"allow"') 'Upgrade must remove the old wildcard domain rule.'
+    Assert-True ($upgradedConfig -notmatch '(?m)^\s*default_permissions\s*=\s*"codex-safe-workspace"') 'Upgrade must remove the plugin-owned global default pin.'
+    Assert-True ($upgradedConfig -match '(?m)^\s*sandbox_mode\s*=\s*"danger-full-access"') 'Upgrade must preserve the UI-selected Full Access sandbox route.'
     $upgradedState = Get-Content -LiteralPath $legacyStatePath -Raw | ConvertFrom-Json
-    Assert-True ($upgradedState.schemaVersion -eq 2 -and $upgradedState.productVersion -eq '0.1.2' -and $upgradedState.operation -eq 'Upgrade') 'Upgrade must write schema-versioned state.'
+    Assert-True ($upgradedState.schemaVersion -eq 5 -and $upgradedState.productVersion -eq '0.1.6' -and $upgradedState.operation -eq 'Upgrade') 'Upgrade must write schema-versioned state.'
     Assert-True ($upgradedState.previousStateSnapshot -and (Test-Path -LiteralPath $upgradedState.previousStateSnapshot -PathType Leaf)) 'Upgrade must retain an immutable previous-state snapshot.'
     Assert-True ([IO.Path]::GetFullPath($upgradedState.ConfigBackup).StartsWith([IO.Path]::GetFullPath((Join-Path $upgradeStateRoot 'backups')), [StringComparison]::OrdinalIgnoreCase)) 'Upgrade backup must stay under the transaction backup root.'
 
@@ -209,23 +224,32 @@ unified_exec = true
     Invoke-GitTest -Repository $repository -GitArguments @('add', 'tracked.txt') | Out-Null
     Invoke-GitTest -Repository $repository -GitArguments @('commit', '-m', 'initial') | Out-Null
 
+    $primaryRepository = $repository
+    $repository = Join-Path $temporaryRoot 'linked-worktree'
+    Invoke-GitTest -Repository $primaryRepository -GitArguments @('worktree', 'add', '-b', 'codex/recovery-test', $repository) | Out-Null
+    $commonGitDirectory = (Invoke-GitTest -Repository $repository -GitArguments @('rev-parse', '--git-common-dir') | Select-Object -First 1).Trim()
+    Assert-True ($commonGitDirectory -match '[\\/]\.git$') 'Linked-worktree test must use the primary repository shared Git directory.'
     $installResult = @(& $installScript -ApprovalMode AskMe -NetworkMode Allowlist -AllowedDomain 'example.com' -WindowsSandbox Keep -WorkspacePath $repository -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -MigrateLegacySettings -ConfirmApply -NonInteractive)
     $installSummary = @($installResult | Where-Object { $_.PSObject.Properties['Status'] } | Select-Object -Last 1)
     Assert-True ($installSummary.Count -eq 1) 'Installer must return a structured completion summary.'
-    Assert-True ($installSummary[0].RequiredPermissionSelection -match 'choose Custom') 'Completion summary must direct the user to Custom permissions.'
-    Assert-True ($installSummary[0].RequiredPermissionSelection -match 'codex-safe-workspace') 'Completion summary must name the custom profile.'
-    Assert-True ($installSummary[0].RequiredPermissionSelection -match 'Do not choose Full Access') 'Completion summary must distinguish Custom from Full Access.'
+    Assert-True ($installSummary[0].RequiredPermissionSelection -match 'not the global default') 'Completion summary must identify the managed profile as selectable rather than globally pinned.'
+    Assert-True ($installSummary[0].RequiredPermissionSelection -match 'codex-safe-workspace') 'Completion summary must name the selectable custom profile.'
+    Assert-True ($installSummary[0].RequiredPermissionSelection -match 'Full Access') 'Completion summary must explain the explicit UI override.'
+    Assert-True ($installSummary[0].RequiredPermissionSelection -match ':danger-full-access') 'Completion summary must name the expected effective Full Access profile.'
+    Assert-True ($installSummary[0].RequiredPermissionSelection -match 'next user message without restarting Codex') 'Completion summary must promise next-turn routing without a Codex restart.'
+    Assert-True (-not $installSummary[0].PSObject.Properties['GitCommitBridgeEnabled']) 'Installer must not expose an alternate normal-commit backend.'
     if ($env:OS -eq 'Windows_NT') {
-        Assert-True ($installSummary[0].RequiredRestart -match 'Restart Codex and start a new task') 'Windows activation must require a restart and fresh task.'
+        Assert-True ($installSummary[0].RequiredRestart -match 'start one new task') 'The machine-configuration upgrade must require only one fresh task to load the unpinned route.'
+        Assert-True ($installSummary[0].RequiredRestart -match 'permission changes must apply on the next message without restarting Codex') 'Routine task-level permission changes must not require restarting Codex.'
         Assert-True ($installSummary[0].RequiredRestart -match 'fully quit every Codex desktop window and CLI process') 'Repeated prompts must escalate to a complete process shutdown.'
     }
 
     $installedConfig = [IO.File]::ReadAllText($configPath)
     Assert-True ($installedConfig -match 'model = "test-model"') 'Unrelated top-level settings must be preserved.'
     Assert-True ($installedConfig -match 'unified_exec = true') 'Unrelated feature settings must be preserved.'
-    Assert-True ($installedConfig -notmatch '(?m)^\s*sandbox_mode\s*=') 'Legacy sandbox_mode must be removed during migration.'
-    Assert-True ($installedConfig -notmatch '(?m)^\s*\[sandbox_workspace_write\]') 'Legacy workspace section must be removed during migration.'
-    Assert-True ($installedConfig -match 'default_permissions = "codex-safe-workspace"') 'Managed permission profile must become active.'
+    Assert-True ($installedConfig -match '(?m)^\s*sandbox_mode\s*=\s*"workspace-write"') 'The UI sandbox route must be preserved, even when the compatibility migration flag is present.'
+    Assert-True ($installedConfig -match '(?m)^\s*\[sandbox_workspace_write\]') 'The legacy workspace settings used by the UI route must be preserved.'
+    Assert-True ($installedConfig -notmatch '(?m)^\s*default_permissions\s*=\s*"codex-safe-workspace"') 'Managed permission profile must not be globally pinned.'
     Assert-True ($installedConfig -match '(?m)^\s*":root"\s*=\s*"deny"') 'Filesystem root must be denied.'
     Assert-True ($installedConfig -match '(?m)^\s*"\*\*/\.env"\s*=\s*"deny"') 'Workspace .env glob must be denied.'
     Assert-True ($installedConfig -match '(?ms)\[features\].*network_proxy = true') 'Allowlist mode must activate the network proxy.'
@@ -233,6 +257,9 @@ unified_exec = true
 
     $assessment = (& $assessScript -CodexHome $codexHome -ConfigPath $configPath -AsJson) | ConvertFrom-Json
     Assert-True $assessment.ManagedLeastPrivilegeProfile 'Assessment must recognize the installed managed profile.'
+    Assert-True $assessment.DynamicUiRoutingReady 'Assessment must recognize the unpinned dynamic UI route.'
+    Assert-True ($assessment.RegisteredPermissionProfile -eq 'codex-safe-workspace') 'Assessment must report the registered selectable profile.'
+    Assert-True (-not $assessment.PermissionProfile) 'Assessment must report that no global default permission profile is pinned.'
     Assert-True ($assessment.CommandNetworkEnabled -and $assessment.NetworkProxyEnabled) 'Assessment must distinguish enabled network from active proxy enforcement.'
     Assert-True ($assessment.CommandNetworkRoute -eq 'ProxyFiltered') 'Assessment must classify Allowlist as proxy-filtered networking.'
     Assert-True (-not $assessment.FullAccessDetected) 'Assessment must not report Full Access for the managed profile.'
@@ -246,13 +273,23 @@ unified_exec = true
     $verificationJson = & $testScript -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -AsJson
     $verification = $verificationJson | ConvertFrom-Json
     Assert-True ($verification.Overall -ne 'FAILED') ("Static verification must not fail after installation. Report: {0}" -f $verificationJson)
+    $dynamicRoutingCheck = @($verification.Checks | Where-Object Control -eq 'Dynamic UI routing')
+    Assert-True ($dynamicRoutingCheck.Count -eq 1 -and $dynamicRoutingCheck[0].Status -eq 'PASS') 'Verifier must pass only when the managed profile is not globally pinned.'
     $ruleCheck = @($verification.Checks | Where-Object Control -eq 'Rule engine')
     if (Get-Command codex -ErrorAction SilentlyContinue) {
         Assert-True ($ruleCheck.Count -eq 1 -and $ruleCheck[0].Status -eq 'PASS') 'Installed exact-prefix rule must pass codex execpolicy validation.'
     }
     $installState = Get-Content -LiteralPath (Join-Path $stateRoot 'install-state.json') -Raw | ConvertFrom-Json
     Assert-True (@($installState.AllowedDomains).Count -eq 1 -and $installState.AllowedDomains[0] -eq 'example.com') 'Allowlist install state must record its explicit domain rule.'
+    Assert-True ($installState.PermissionActivation -eq 'UiSelectable') 'Install state must record the UI-selectable activation model.'
     $installedCheckpointScript = $installState.BridgePath
+    $bridgeRegistryPath = $installState.AuthorizedWorkspacesPath
+    $bridgeRegistry = Get-Content -LiteralPath $bridgeRegistryPath -Raw | ConvertFrom-Json
+    Assert-True ($bridgeRegistry.schemaVersion -eq 1) 'Recovery registry must use the Save/List-only schema.'
+    Assert-True (-not $bridgeRegistry.PSObject.Properties['commitRoots']) 'Recovery registry must not authorize normal branch commits.'
+    $installedRuleText = [IO.File]::ReadAllText($installState.RulesPath)
+    Assert-True ($installedRuleText -match '\["Save", "List"\]') 'Installed rule must allow only checkpoint Save/List actions.'
+    Assert-True ($installedRuleText -notmatch '"Status"|"Commit"') 'Installed rule must not expose status or commit as an alternate Git backend.'
 
     [IO.File]::WriteAllText((Join-Path $repository 'tracked.txt'), 'changed after checkpoint', [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $repository 'ordinary-untracked.txt'), 'untracked', [Text.UTF8Encoding]::new($false))
@@ -266,6 +303,9 @@ unified_exec = true
     Assert-True ($indexBefore -eq $indexAfter) 'Checkpoint must not change the real index.'
     $checkpointContent = (Invoke-GitTest -Repository $repository -GitArguments @('show', "$($checkpoint.Commit):tracked.txt") | Select-Object -First 1).Trim()
     Assert-True ($checkpointContent -eq 'changed after checkpoint') 'Checkpoint commit must contain the working-tree version.'
+    $unsupportedCommitRefused = $false
+    try { & $installedCheckpointScript -Action Commit -Repository $repository -Message 'must not exist' -Path 'tracked.txt' | Out-Null } catch { $unsupportedCommitRefused = $true }
+    Assert-True $unsupportedCommitRefused 'Recovery bridge must refuse the removed normal-commit action.'
 
     [IO.File]::WriteAllText((Join-Path $repository '.env'), 'SYNTHETIC_ONLY=not-a-secret', [Text.UTF8Encoding]::new($false))
     $refusedSensitive = $false
@@ -320,7 +360,7 @@ unified_exec = true
     if ($env:OS -eq 'Windows_NT') { Write-Output 'PASS: elevated sandbox proxy-port oscillation diagnostics' }
     Write-Output 'PASS: least-privilege and allowlist generation'
     Write-Output 'PASS: static and execpolicy verification'
-    Write-Output 'PASS: branch/index-neutral Git checkpoint'
+    Write-Output 'PASS: branch/index-neutral recovery checkpoint without an alternate Git commit backend'
     Write-Output 'PASS: sensitive-file, registry-override, Git-pin, and unauthorized-repository refusals'
     Write-Output 'PASS: rollback target-lock validation'
     Write-Output 'PASS: versioned upgrade migration and chained rollback'

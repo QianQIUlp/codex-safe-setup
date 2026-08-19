@@ -42,9 +42,13 @@ codex plugin add codex-safe-setup@codex-safe-setup
 使用 $codex-safe-setup 预览并应用我现有 Codex Safe Setup 安装的升级。
 ```
 
-升级会先展示原有和目标审批方式、联网模式、Windows 沙箱和工作区选择；确认前不会写入。应用时会创建按事务隔离的备份和不可变的前一状态快照，回滚每次只退回一个配置世代。插件刷新、机器配置迁移、任务激活是三个不同阶段；配置升级后必须完整重启 Codex，并新建任务。
+升级会先展示原有和目标审批方式、联网模式、Windows 沙箱和工作区选择；确认前不会写入。应用时会创建按事务隔离的备份和不可变的前一状态快照，回滚每次只退回一个配置世代。插件刷新、机器配置迁移、任务激活是三个不同阶段；配置升级后只需新建一次任务来加载新布局。
 
 0.1.1 的 `Unrestricted` 用户必须执行 0.1.2 配置迁移：旧版通配符代理并不能让原生 SSH 等直连协议联网。迁移会关闭过滤代理并删除通配符域名表。若保留的是无限制联网和 Windows `Elevated`，仍需重新确认相应风险与一次管理员设置提示。
+
+0.1.5 恢复简单权限模型：codex-safe-workspace 只是日常默认；当用户在 Codex UI 中临时选择 Full Access 时，该任务必须真正激活 :danger-full-access。本版移除 Status/Commit Git 桥接；经验证的 Full Access 任务直接使用原生 Git。Save/List 恢复检查点仍可选使用。
+
+0.1.6 修复剩余的 UI 动态路由错误：`codex-safe-workspace` 仍是可选的 Custom / 自定义权限配置，但不再写入全局 `default_permissions`。升级只移除插件自己写入的固定值，保留 UI 沙箱设置和用户自己的其他默认值；之后在任务中切换 Full Access 并发送下一条消息即可生效，无需重启 Codex。
 
 如果你以前是手动复制 `~/.codex/skills/secure-codex-setup`，而不是通过 marketplace 安装插件，请先把旧目录可恢复地移出技能发现路径，再添加 GitHub marketplace、安装 `codex-safe-setup` 并新建任务。不要让独立旧副本和插件副本同时被发现。
 
@@ -78,14 +82,14 @@ Windows 上还会分别询问是否安装 PowerShell 7、Codex CLI，以及是�
 
 ## 它建立的控制
 
-- 用命名权限配置拒绝文件系统根目录，只保留最小运行时读取，并把写入限制到已登记工作区。
+- 创建可选择但不作为全局默认值的命名权限配置：拒绝文件系统根目录，只保留最小运行时读取，并把写入限制到已登记工作区。
 - 默认拒绝工作区中的 `.env`、私钥、npm 凭据、云凭据等常见敏感文件。
 - 明确选择离线、由代理强制执行的域名白名单，或关闭代理的直连无限制联网。
 - 保留 Codex 对 `.git`、`.codex`、`.agents` 的保护。
-- 可选安装一个范围严格、固定 Git 路径与哈希的检查点桥接器；它不会改当前分支、真实索引或工作树。
+- 可选安装只提供 Save/List 的窄恢复检查点桥接，不替代原生 Git 的 status 或 commit。
 - 备份每个受管理文件，并生成精确回滚命令。
 
-安装器不会默默混用新版 permission profiles 与旧版 sandbox 设置。迁移旧设置必须明确同意，而且会先完整备份。
+安装器会保留任务 UI 使用的旧版 sandbox 路由，并让自定义 permission profile 保持未固定状态。兼容参数不再删除这些 UI 设置；写入前仍会完整备份。
 
 ## 它没有控制的范围
 
@@ -102,7 +106,7 @@ Web Search、Browser、Computer Use、App、Connector、其他 Plugin、MCP、�
 - `FAIL`：必要条件缺失或互相冲突。
 - `NOT CONTROLLED`：属于其他控制面。
 
-配置检查和 `codex execpolicy check` 是证据，不是对所有未来行为的绝对证明。安装完成后，必须在 Codex 的权限选择器中选择 **自定义（Custom）**，确认当前配置为 `codex-safe-workspace`，不要切回 Full Access。Windows 上先重启 Codex 并新建任务，不要继续使用安装前的旧任务；只有管理员提示反复出现时，才需要完整退出所有 Codex 桌面窗口和 CLI 进程后重新启动。其他平台新建任务或 CLI 会话后再做运行时验证。
+配置检查和 codex execpolicy check 只是证据，不能证明当前任务的实际权限。`codex-safe-workspace` 是可选择但未全局固定的配置。机器配置升级后先新建一次任务；此后在 UI 中选择 Full Access 并发送下一条消息，任务必须立即回报 `activePermissionProfile.id = :danger-full-access`（或等价的权威运行时元数据），无需重启 Codex。codexsandboxonline/offline 账户名不是权限证据。真正的 Full Access 任务直接使用原生 Git。只有 Windows 管理员提示反复出现时，才需完整退出所有 Codex 桌面窗口和 CLI 进程后再重启。
 
 运行时验证必须匹配模式：`Off` 要证明可达目标被阻断；`Allowlist` 要证明白名单目标经代理成功、未列出目标失败；`Unrestricted` 要用直连 TCP 或原生 OpenSSH 成功，代理横幅不能作为直连证据。
 
@@ -110,7 +114,7 @@ Windows 上推荐的 `Elevated` 沙箱需要管理员确认操作系统级初始
 
 带版本的安装状态会保留按事务隔离的备份和不可变的前一状态快照。升级后的回滚会同时恢复上一代受管理文件和上一代活动状态，因此可以按世代继续回滚。
 
-可选检查点会把已跟踪文件和普通未跟踪文件保存到 `refs/codex-safe/checkpoints/*` 隐藏引用中。它拒绝敏感未跟踪文件，也不会自动运行 `reset --hard`、`clean`、替换分支或原地恢复。详见[实现原理](docs/how-it-works.md)。
+可选恢复桥接只会把已跟踪文件和普通未跟踪文件保存到 refs/codex-safe/checkpoints/* 隐藏引用，且只提供 Save 和 List。它拒绝敏感未跟踪文件，也不会自动运行 reset --hard、clean、替换分支或原地恢复。Git status/add/commit/branch 不由本项目代理。详见实现原理。
 
 ## 开发与贡献
 

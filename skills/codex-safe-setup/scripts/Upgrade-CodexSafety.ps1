@@ -85,7 +85,7 @@ if ($effectiveWorkspace -and (Test-Path -LiteralPath $effectiveWorkspace -PathTy
     $installArguments.WorkspacePath = $effectiveWorkspace
 }
 elseif ($effectiveWorkspace) {
-    Write-Warning "The recorded workspace no longer exists: $effectiveWorkspace. Its registry is preserved but not rewritten."
+    throw "The recorded workspace no longer exists: $effectiveWorkspace. Pass an existing -WorkspacePath so the recovery registry can be rewritten; refusing to leave an older bridge rule active."
 }
 if ($MigrateLegacySettings) { $installArguments.MigrateLegacySettings = $true }
 if ($AcknowledgeRisk) { $installArguments.AcknowledgeRisk = $true }

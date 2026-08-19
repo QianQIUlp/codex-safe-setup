@@ -317,7 +317,7 @@ export const zhCN: UiContent = {
       },
     ],
     caveat: '静态配置和 codex execpolicy check 是证据，不是对所有未来运行时行为的证明。Codex 升级后请重新验证。',
-    restart: '安装后请重启 Codex，再进行运行时探测。',
+    restart: '安装后先新建一次任务；此后 UI 权限切换在下一条消息生效，无需重启 Codex。',
     checks: {
       label: '验证实际检查什么',
       items: [
@@ -361,7 +361,7 @@ export const zhCN: UiContent = {
         '前置依赖（PowerShell 7、Codex CLI）单独征求同意。',
         '先以 Plan-only 预览确切的配置内容。',
         '只有在你明确确认后才写入。',
-        '静态与 execpolicy 验证；之后请重启 Codex。',
+        '静态与 execpolicy 验证；之后新建一次任务。',
         '备份已记录——精确回滚随时可用。',
       ],
     },

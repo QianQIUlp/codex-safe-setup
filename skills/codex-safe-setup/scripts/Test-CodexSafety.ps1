@@ -26,16 +26,17 @@ else {
     $profileSectionText = Get-CssTomlSectionText -Text $configText -Section 'permissions.codex-safe-workspace'
     $filesystemSectionText = Get-CssTomlSectionText -Text $configText -Section 'permissions.codex-safe-workspace.filesystem'
     $workspaceSectionText = Get-CssTomlSectionText -Text $configText -Section 'permissions.codex-safe-workspace.filesystem.":workspace_roots"'
-    $checks.Add((New-CssCheck -Status $(if ($configText -match '(?m)^\s*default_permissions\s*=\s*"codex-safe-workspace"') { 'PASS' } else { 'FAIL' }) -Control 'Active profile' -Evidence 'default_permissions must select codex-safe-workspace'))
-    $checks.Add((New-CssCheck -Status $(if ($filesystemSectionText -match '(?m)^\s*":root"\s*=\s*"deny"') { 'PASS' } else { 'FAIL' }) -Control 'Reads outside workspace' -Evidence 'root deny is present in the active managed filesystem table'))
-    $checks.Add((New-CssCheck -Status $(if ($filesystemSectionText -match '(?m)^\s*":minimal"\s*=\s*"read"') { 'PASS' } else { 'FAIL' }) -Control 'Minimal runtime reads' -Evidence 'minimal runtime read grant is present in the active managed filesystem table'))
-    $checks.Add((New-CssCheck -Status $(if ($workspaceSectionText -match '(?m)^\s*"\."\s*=\s*"write"') { 'PASS' } else { 'FAIL' }) -Control 'Workspace writes' -Evidence 'workspace root write grant is present in the active managed workspace table'))
-    $checks.Add((New-CssCheck -Status $(if ($workspaceSectionText -match '(?m)^\s*"\*\*/\.env"\s*=\s*"deny"') { 'PASS' } else { 'PARTIAL' }) -Control 'Workspace secret reads' -Evidence 'common credential deny globs are in the active managed workspace table'))
+    $configuredDefaultPermissions = Get-CssTomlTopLevelStringValue -Text $configText -Key 'default_permissions'
+    $configuredSandboxMode = Get-CssTomlTopLevelStringValue -Text $configText -Key 'sandbox_mode'
+    $checks.Add((New-CssCheck -Status $(if ($profileSectionText -match '(?m)^\s*extends\s*=\s*":workspace"') { 'PASS' } else { 'FAIL' }) -Control 'Registered profile' -Evidence 'codex-safe-workspace must be available as a selectable custom profile'))
+    $checks.Add((New-CssCheck -Status $(if ($configuredDefaultPermissions -eq $script:CssProfileName) { 'FAIL' } else { 'PASS' }) -Control 'Dynamic UI routing' -Evidence 'codex-safe-workspace must not be pinned in default_permissions; task-level Read-only, Workspace, and Full Access changes must remain routable'))
+    $checks.Add((New-CssCheck -Status $(if ($filesystemSectionText -match '(?m)^\s*":root"\s*=\s*"deny"') { 'PASS' } else { 'FAIL' }) -Control 'Reads outside workspace' -Evidence 'root deny is present in the registered managed filesystem table'))
+    $checks.Add((New-CssCheck -Status $(if ($filesystemSectionText -match '(?m)^\s*":minimal"\s*=\s*"read"') { 'PASS' } else { 'FAIL' }) -Control 'Minimal runtime reads' -Evidence 'minimal runtime read grant is present in the registered managed filesystem table'))
+    $checks.Add((New-CssCheck -Status $(if ($workspaceSectionText -match '(?m)^\s*"\."\s*=\s*"write"') { 'PASS' } else { 'FAIL' }) -Control 'Workspace writes' -Evidence 'workspace root write grant is present in the registered managed workspace table'))
+    $checks.Add((New-CssCheck -Status $(if ($workspaceSectionText -match '(?m)^\s*"\*\*/\.env"\s*=\s*"deny"') { 'PASS' } else { 'PARTIAL' }) -Control 'Workspace secret reads' -Evidence 'common credential deny globs are in the registered managed workspace table'))
     $checks.Add((New-CssCheck -Status $(if ($profileSectionText -match '(?m)^\s*extends\s*=\s*":workspace"') { 'PASS' } else { 'FAIL' }) -Control 'Protected metadata' -Evidence 'The managed profile inherits .git, .codex, and .agents protection from :workspace'))
-    $legacy = Test-CssLegacySettings -Text $configText
-    $checks.Add((New-CssCheck -Status $(if ($legacy.Present) { 'FAIL' } else { 'PASS' }) -Control 'Configuration precedence' -Evidence 'legacy sandbox settings must not override permission profiles'))
-    $activeFullAccess = $configText -match '(?m)^\s*(default_permissions|sandbox_mode)\s*=\s*["'']:?danger-full-access["'']'
-    $checks.Add((New-CssCheck -Status $(if ($activeFullAccess) { 'FAIL' } else { 'PASS' }) -Control 'Full Access' -Evidence 'No active top-level danger-full-access selection was found'))
+    $fullAccessSelected = $configuredDefaultPermissions -eq ':danger-full-access' -or $configuredSandboxMode -eq 'danger-full-access'
+    $checks.Add((New-CssCheck -Status $(if ($fullAccessSelected) { 'PARTIAL' } else { 'PASS' }) -Control 'Configured UI selection' -Evidence $(if ($fullAccessSelected) { 'Full Access is selected in configuration; verify activePermissionProfile.id = :danger-full-access in the next turn.' } else { 'No top-level Full Access selection is configured.' })))
 }
 
 if ($state) {
@@ -163,7 +164,8 @@ else {
     'A fresh task must prove a direct TCP connection succeeds with a native client such as Test-NetConnection or OpenSSH; a proxy-only banner is not sufficient'
 }
 $checks.Add((New-CssCheck -Status PARTIAL -Control 'Runtime command egress' -Evidence $runtimeNetworkEvidence))
-$checks.Add((New-CssCheck -Status PARTIAL -Control 'Runtime filesystem enforcement' -Evidence 'Restart Codex, select Custom, and run a new sandboxed task to prove OS filesystem enforcement; fully quit all Codex processes only if administrator prompts repeat'))
+$checks.Add((New-CssCheck -Status PARTIAL -Control 'Runtime filesystem enforcement' -Evidence 'Select the intended task profile and send a new message to prove OS filesystem enforcement; task-level changes must not require restarting Codex'))
+$checks.Add((New-CssCheck -Status PARTIAL -Control 'Task permission selection' -Evidence 'codex-safe-workspace is selectable but not globally pinned. A UI Full Access selection must produce activePermissionProfile.id = :danger-full-access on the next turn; the codexsandboxonline/offline account name is not permission evidence'))
 $checks.Add((New-CssCheck -Status 'NOT CONTROLLED' -Control 'Other egress surfaces' -Evidence 'Web Search, Browser, Computer Use, apps, plugins, MCP, and cloud tasks use separate controls'))
 
 $overall = if (@($checks | Where-Object Status -eq 'FAIL').Count -gt 0) { 'FAILED' } elseif (@($checks | Where-Object Status -eq 'PARTIAL').Count -gt 0) { 'PARTIALLY VERIFIED' } else { 'VERIFIED' }

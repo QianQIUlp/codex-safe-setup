@@ -10,6 +10,16 @@
 
 Auto-review is a reviewer substitution. It does not alter filesystem, network, protected-path, or workspace limits.
 
+## Default and task-level selection
+
+Codex protocol requests cannot combine a named `permissions` profile with the legacy `sandboxPolicy` route. Pinning `default_permissions = "codex-safe-workspace"` globally while the desktop UI changes `sandbox_mode` can therefore leave the task on the custom profile even when the UI says Full Access.
+
+Version 0.1.6 registers `codex-safe-workspace` without setting it as `default_permissions`. Existing plugin-owned pins are removed during upgrade, while a different user-owned default and the UI's legacy `sandbox_mode` / `[sandbox_workspace_write]` settings are preserved. The compatibility flag `-MigrateLegacySettings` no longer deletes them.
+
+Select `codex-safe-workspace` explicitly when the bounded profile is wanted. A later Full Access selection must activate the built-in `:danger-full-access` profile on the next user message without restarting Codex; verify `activePermissionProfile.id` or authoritative danger-full-access task metadata.
+
+Do not infer permission scope from the Windows sandbox username. codexsandboxonline and codexsandboxoffline distinguish sandbox/network variants, not Full Access versus workspace access. If the UI and runtime metadata disagree, report an activation failure instead of widening workspace roots or adding a Git backend.
+
 ## Command-network modes
 
 | Installer value | Permission network | Filtering proxy | Behavior | Requirement |
@@ -44,6 +54,6 @@ This matches OpenAI's documented internet-access risks and its recommendation to
 
 The managed profile extends `:workspace`, denies `:root`, permits `:minimal` reads, permits workspace-root writes, optionally denies temp directories, and denies common credential-file globs. It inherits Codex protections for `.git`, `.codex`, and `.agents`.
 
-Permission profiles are Beta. The installer refuses to combine them silently with legacy `sandbox_mode` or `[sandbox_workspace_write]`. Use `-MigrateLegacySettings` only after review; the original file is backed up first.
+Permission profiles are Beta. The installer keeps the custom profile dormant until explicitly selected and preserves the legacy sandbox route for task-level UI switching. Every apply or upgrade still creates a configuration backup first.
 
 Base installation can proceed without Codex CLI, but exact version and rule behavior remain partially verified. A complete result requires a compatible CLI and successful `codex execpolicy check`.

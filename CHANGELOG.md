@@ -2,6 +2,39 @@
 
 All notable changes are documented here. Releases follow semantic versioning.
 
+## 0.1.6 - 2026-08-18
+
+- Fix dynamic task-level permission routing by registering `codex-safe-workspace` without pinning it in global `default_permissions`.
+- Upgrade existing installations by removing only the plugin-owned `default_permissions = "codex-safe-workspace"` value while preserving any different user-owned default.
+- Preserve `sandbox_mode` and `[sandbox_workspace_write]` so Read-only, Workspace, and Full Access UI changes can apply on the next user message without restarting Codex.
+- Record the UI-selectable activation model in install-state schema 5 and distinguish registered, configured-default, and runtime permission profiles in assessment and verification output.
+- Add regressions for the exact mixed configuration that caused Full Access to fall back to `codex-safe-workspace`.
+
+## 0.1.5 - 2026-08-18
+
+- Keep codex-safe-workspace as the normal default while preserving explicit task-level UI overrides; Full Access is accepted only when the effective runtime is :danger-full-access.
+- Stop treating codexsandboxonline or codexsandboxoffline as permission evidence; those names describe Windows sandbox/network variants.
+- Remove the alternate Status/Commit Git backend and restore native Git as the only normal status/add/commit/branch path.
+- Migrate install state to schema 4 and rewrite old workspace registries to the recovery-only Save/List format without changing the user's network, approval, Windows sandbox, backup, or rollback choices.
+- Add package and behavioral assertions for UI/runtime profile provenance and for the absence of normal-commit bridge actions.
+
+## 0.1.4 - 2026-08-18
+
+- Rebuild release artifacts from byte-preserved UTF-8 source after withdrawing the encoding-damaged v0.1.3 package.
+- Fix automatic publication by explicitly dispatching the Release workflow after an aligned version tag is validated or created.
+- Add package validation for strict UTF-8 decoding and required Chinese text sentinels so encoding regressions fail CI.
+
+## 0.1.3 - 2026-08-18
+
+> Withdrawn: GitHub release artifacts for this version were encoding-damaged. Use 0.1.4 or later.
+
+- Fix linked-worktree Git workflows without granting raw write access to the parent repository's shared `.git`.
+- Add bridge `Status` so real Git state can be compared with sandbox/ACL visibility artifacts instead of treating inaccessible tracked files as deletions.
+- Add an explicit opt-in `Commit` action for registered worktrees. It accepts literal paths only, defaults to `codex/` branches, requires a clean index and no in-progress Git operation, suppresses hooks/signing, refuses repository-local clean/process filters, verifies the staged path set, and preserves unselected changes.
+- Upgrade install state to schema 3 and registry schema 2 while preserving prior choices and rollback generations. Existing installations keep normal commits disabled until the user explicitly enables them.
+- Add guarded automatic release tagging when an aligned manifest and marketplace version reaches `main`; the existing tag workflow still validates, packages, checksums, and publishes the release.
+- Add isolated linked-worktree coverage for shared Git metadata, exact-path commits, branch isolation, and untouched unselected changes.
+
 ## 0.1.2 - 2026-08-18
 
 - Fix `Unrestricted` command networking to use direct networking with the filtering proxy disabled, so native protocols such as OpenSSH are not trapped behind the offline sandbox account's proxy route.

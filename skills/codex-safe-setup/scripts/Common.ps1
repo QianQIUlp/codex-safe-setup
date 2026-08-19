@@ -1,7 +1,7 @@
 Set-StrictMode -Version Latest
 
-$script:CssStateSchemaVersion = 2
-$script:CssProductVersion = '0.1.2'
+$script:CssStateSchemaVersion = 5
+$script:CssProductVersion = '0.1.6'
 $script:CssManagedStart = '# >>> codex-safe-setup managed >>>'
 $script:CssManagedEnd = '# <<< codex-safe-setup managed <<<'
 $script:CssProfileName = 'codex-safe-workspace'
@@ -151,6 +151,20 @@ function Remove-CssTomlTopLevelKeys {
         $resultLines.Add($line)
     }
     return ($resultLines -join [Environment]::NewLine).TrimEnd() + [Environment]::NewLine
+}
+
+function Get-CssTomlTopLevelStringValue {
+    param(
+        [AllowEmptyString()][string]$Text,
+        [Parameter(Mandatory)][string]$Key
+    )
+
+    $keyPattern = '^\s*' + [regex]::Escape($Key) + '\s*=\s*["'']([^"'']+)["'']\s*(?:#.*)?$'
+    foreach ($line in [regex]::Split($Text, '\r?\n')) {
+        if ($null -ne (Get-CssTomlSectionName -Line $line)) { break }
+        if ($line -match $keyPattern) { return $Matches[1] }
+    }
+    return $null
 }
 
 function Remove-CssTomlSections {

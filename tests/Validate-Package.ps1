@@ -41,10 +41,35 @@ foreach ($file in $requiredFiles) {
     Assert-True (Test-Path -LiteralPath $file -PathType Leaf) ("Required file is missing: {0}" -f $file)
 }
 
+$strictUtf8 = [Text.UTF8Encoding]::new($false, $true)
+$utf8Files = @($requiredFiles + (Join-Path $repositoryRoot 'CHANGELOG.md'))
+foreach ($file in $utf8Files) {
+    try {
+        $text = [IO.File]::ReadAllText($file, $strictUtf8)
+    }
+    catch {
+        throw ("File is not strict UTF-8: {0}" -f $file)
+    }
+    Assert-True (-not $text.Contains([char]0xFFFD)) ("File contains a Unicode replacement character: {0}" -f $file)
+    Assert-True ($text -notmatch '\?\?\?') ("File contains a likely encoding replacement run: {0}" -f $file)
+}
+
+$utf8Sentinels = @{
+    'README.md' = -join @([char]0x7B80, [char]0x4F53, [char]0x4E2D, [char]0x6587)
+    'README.zh-CN.md' = -join @([char]0x5BA1, [char]0x6279, [char]0x4E0D, [char]0x662F, [char]0x5B89, [char]0x5168, [char]0x8FB9, [char]0x754C)
+    'CHANGELOG.md' = -join @([char]0x81EA, [char]0x5B9A, [char]0x4E49)
+    'skills/codex-safe-setup/SKILL.md' = -join @([char]0x81EA, [char]0x5B9A, [char]0x4E49)
+}
+foreach ($entry in $utf8Sentinels.GetEnumerator()) {
+    $path = Join-Path $repositoryRoot $entry.Key
+    $text = [IO.File]::ReadAllText($path, $strictUtf8)
+    Assert-True ($text.Contains([string]$entry.Value)) ("UTF-8 sentinel is missing: {0}" -f $entry.Key)
+}
+
 $manifestText = [IO.File]::ReadAllText($manifestPath)
 $manifest = $manifestText | ConvertFrom-Json
 Assert-True ($manifest.name -eq 'codex-safe-setup') 'Plugin name must remain codex-safe-setup.'
-Assert-True ($manifest.version -eq '0.1.2') 'Release package must use version 0.1.2.'
+Assert-True ($manifest.version -eq '0.1.6') 'Release package must use version 0.1.6.'
 Assert-True ($manifest.version -match '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$') 'Plugin version must be strict semver.'
 Assert-True (-not [string]::IsNullOrWhiteSpace($manifest.description)) 'Plugin description is required.'
 Assert-True (-not [string]::IsNullOrWhiteSpace($manifest.author.name)) 'Plugin author name is required.'
@@ -80,9 +105,14 @@ Assert-True ($skillText -match 'prompt injection') 'Skill must disclose prompt-i
 Assert-True ($skillText -match 'malware or vulnerable dependencies') 'Skill must disclose download and dependency risk before unrestricted networking.'
 Assert-True ($skillText -match 'Allowlist.*filtering proxy') 'Skill must preserve proxy-enforced domain filtering for Allowlist mode.'
 Assert-True ($skillText -match 'Unrestricted.*disables the proxy.*SSH') 'Skill must define Unrestricted as direct networking for native protocols.'
-Assert-True ($skillText -match 'choose `Custom`') 'Skill must require the Custom permission selection after installation.'
-Assert-True ($skillText -match '`codex-safe-workspace` is the selected profile') 'Skill must name the profile the user should activate.'
-Assert-True ($skillText -match 'fully quit every Codex desktop window and CLI process') 'Skill must require a complete Windows process shutdown after installation.'
+Assert-True ($skillText -match 'must not write.*default_permissions') 'Skill must forbid globally pinning the managed profile.'
+Assert-True ($skillText -match 'next user message without restarting Codex') 'Skill must require dynamic UI permission changes on the next turn without a restart.'
+Assert-True ($skillText -match 'Full Access.*:danger-full-access') 'Skill must require explicit UI Full Access to produce the built-in full-access profile.'
+Assert-True ($skillText -match 'activePermissionProfile') 'Skill must verify task-level permission provenance rather than UI appearance.'
+Assert-True ($skillText -match 'codexsandboxonline.*codexsandboxoffline') 'Skill must reject sandbox account names as permission evidence.'
+Assert-True ($skillText -match 'native Git') 'Skill must preserve ordinary Git in a true Full Access task.'
+Assert-True ($skillText -notmatch 'EnableGitCommitBridge') 'Skill must not offer an alternate normal-commit backend.'
+Assert-True ($skillText -match 'fully quit every Codex desktop window and CLI process') 'Skill must retain the Windows restart diagnostic for configuration activation.'
 Assert-True ($skillText -match 'Repeated administrator prompts are a failure signal') 'Skill must treat repeated elevation prompts as a diagnosable failure.'
 
 $openAiYaml = [IO.File]::ReadAllText($openAiYamlPath)
@@ -114,9 +144,10 @@ foreach ($file in $powerShellFiles) {
     }
 }
 
+Write-Output 'PASS: strict UTF-8 package sources and sentinels'
 Write-Output 'PASS: plugin manifest and release metadata'
 Write-Output 'PASS: Git-backed marketplace metadata'
 Write-Output 'PASS: canonical skill, compatibility alias, and UI metadata'
-Write-Output 'PASS: unrestricted-network disclosure and Windows Custom activation handoff'
+Write-Output 'PASS: unrestricted-network disclosure and task-level Full Access override contract'
 Write-Output 'PASS: required community and security documentation'
 Write-Output ("PASS: PowerShell syntax ({0} files)" -f $powerShellFiles.Count)

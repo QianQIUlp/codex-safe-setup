@@ -29,7 +29,7 @@ Approval is deliberately treated as a separate workflow decision. A person or re
 | Auto-review agent | Applying review policy | Stronger isolation or infallible judgment |
 | PowerShell 7 | More consistent shell behavior | Prevention of semantic mistakes |
 | Codex CLI and execpolicy | Parsing and checking active rule behavior | Proof of every future runtime path |
-| Git checkpoint bridge | Creating narrow recovery snapshots | Backing up ignored or refused secrets |
+| Recovery bridge | Creating narrow Save/List recovery snapshots | General Git, status, commit, or shell authority |
 
 ## Threats and controls
 
@@ -38,12 +38,14 @@ Approval is deliberately treated as a separate workflow decision. A person or re
 | Wrong path outside the project | Deny root; allow writes only to registered workspace roots | Sandbox defects or separately authorized tools |
 | Accidental deletion inside the project | Hidden Git checkpoint ref | Ignored files and sensitive refused files are absent |
 | Reading credentials outside the project | Root deny plus minimal runtime reads | The runtime-defined minimal set must be trusted |
+| UI Full Access selection does not match runtime | Verify activePermissionProfile or authoritative task metadata; fail closed on mismatch | A verified Full Access task intentionally removes the local sandbox boundary |
+| Custom profile pin captures UI sandbox changes | Keep `codex-safe-workspace` selectable but absent from global `default_permissions`; preserve the UI sandbox route | A task still needs runtime verification after each permission change |
 | Reading credentials inside the project | Deny globs for common sensitive names | Unusual filenames require additional deny rules |
 | Shell-based data exfiltration | Network off or active proxy allowlist | An allowed domain can still receive data; direct unrestricted access removes destination containment |
 | Prompt injection from network content | Minimize allowed destinations and treat remote instructions as untrusted | Allowed pages, issues, and dependency documentation can still manipulate the agent |
 | Malicious, vulnerable, or restricted downloads | Narrow network access and review dependency/content changes | An allowed source can still be compromised or carry restricted content |
 | Human or reviewer error | Hard capability boundaries | In-boundary actions can still be harmful |
-| Broad rule becoming a shell escape | Exact executable and checkpoint-script prefix | Rules are evolving and need upgrade verification |
+| Broad rule becoming a shell escape | Exact executable, recovery script, and Save/List action prefix plus registered-root validation | Rules are evolving and need upgrade verification |
 | Checkpoint bridge used in another repository | Canonical authorized-root registry | Registry and bridge integrity depend on the host |
 | Git executable replacement | Pinned path and SHA-256 verification | Legitimate Git upgrades require reinstall |
 | Rollback redirected to arbitrary paths | Fixed layout and recorded-target validation | Backups still need filesystem protection |
@@ -71,7 +73,7 @@ These surfaces must be evaluated separately. The verifier reports them as `NOT C
 
 ## Verification limits
 
-Configuration parsing, file inspection, and `codex execpolicy check` show that the generated policy matches expected structure and decisions. They do not prove that every command, tool, product surface, or future Codex version will enforce it identically. Re-run verification after upgrades and perform runtime probes in a new Codex execution environment.
+Configuration parsing, file inspection, and `codex execpolicy check` show that the generated policy matches expected structure and decisions. They do not prove that every command, tool, product surface, or future Codex version will enforce it identically. Re-run verification after upgrades and perform runtime probes in one new Codex execution environment. Thereafter, verify each task-level Full Access change on the next user message from activePermissionProfile or authoritative task metadata without requiring a restart, never from the Windows sandbox account name.
 
 ## Security non-goals
 

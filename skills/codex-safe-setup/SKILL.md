@@ -37,6 +37,10 @@ If `CODEX_HOME/safe-setup/install-state.json` exists, do not rerun the first-ins
 
 For a 0.1.1-or-earlier `Unrestricted` installation, explain that the old wildcard proxy representation did not provide native direct networking. The 0.1.2 migration disables the filtering proxy, removes the wildcard domain table, records state schema 2, and requires a full Codex restart plus a fresh task. Never claim the plugin update alone activated this migration.
 
+For 0.1.4-or-earlier installations, version 0.1.5 records state schema 4 and removes the alternate normal-Git Status / Commit bridge. Upgrade rewrites any schema-2 workspace registry to the recovery-only Save/List schema and does not preserve commit authorizations. The user's safe default profile, networking choice, backups, rollback chain, and optional recovery checkpoints remain intact.
+
+Version 0.1.6 records state schema 5 and fixes task-level permission routing. Upgrade removes `default_permissions = "codex-safe-workspace"` only when that plugin-owned value is present, keeps the profile registered as a UI-selectable Custom profile, preserves the user's legacy UI sandbox settings and any different user-owned default profile, and retains the existing backup and rollback chain.
+
 ### 2. Explain the choices before asking
 
 Lead with: **Do not treat approval as safety. Limit what the agent can change, read, and send.**
@@ -76,9 +80,15 @@ Use `Skip` for each declined dependency. Do not silently install Node.js when np
 
 Choose Windows `Elevated` when the user accepts its administrator-approved setup; otherwise use `Unelevated` or `Keep` and explain the weaker boundary.
 
-Run `Install-CodexSafety.ps1` with `-PlanOnly`. Include `-MigrateLegacySettings` only after explaining that the installer will replace conflicting legacy sandbox keys while retaining a full backup.
+Run `Install-CodexSafety.ps1` with `-PlanOnly`. `-MigrateLegacySettings` remains accepted for command-line compatibility, but version 0.1.6 preserves legacy `sandbox_mode` and `[sandbox_workspace_write]` settings because the Codex UI uses that route for Read-only, Workspace, and Full Access selections.
 
 Show the configuration path, managed keys, chosen boundaries, checkpoint registration, backup location, rollback command, and controls that remain outside this skill.
+
+Register the named `codex-safe-workspace` profile, but the installer must not write it to `default_permissions`. Remove that top-level key only when it equals the plugin-owned profile name; preserve a different user-owned value. Do not create or modify managed `allowed_permission_profiles` restrictions, and preserve legacy UI sandbox keys so the task permission selector can route subsequent turns.
+
+For a linked Git worktree, keep the parent repository's shared .git protected in the safe default. If the user temporarily selects Full Access for a task, use native Git normally in that task; Full Access must remove the sandbox restriction rather than route Git through a separate backend. Never add a parent-.git write exception or a commit bridge to compensate for a UI/runtime mismatch.
+
+If direct Git reports surprising tracked deletions in the safe default, treat sandbox visibility or host ACL as hypotheses and verify them read-only. The codexsandboxonline and codexsandboxoffline account names identify Windows sandbox/network variants; neither name proves Full Access, filesystem scope, or effective task permissions.
 
 ### 5. Apply or upgrade only after confirmation
 
@@ -110,13 +120,17 @@ After approval, rerun with `-ConfirmApply -NonInteractive`. For `Unrestricted`, 
   -NonInteractive
 ```
 
-Never select or preserve `danger-full-access` as a verified safe profile.
+Never install `codex-safe-workspace` or `:danger-full-access` as the configured global default. Both remain valid explicit task-level selections in the Codex UI.
 
 ### 6. Verify, activate, and report honestly
 
 Run `Test-CodexSafety.ps1`. Treat static configuration and `execpolicy` checks as evidence, not runtime proof. Mark unavailable CLI rule checks as `PARTIAL`, not `PASS`.
 
-After a successful apply, end with a visible activation block. Tell the user to open the Codex permission selector, choose `Custom` / `???`, and confirm that `codex-safe-workspace` is the selected profile; explicitly say not to choose Full Access. On Windows, tell the user to restart Codex and start a new task rather than resume a pre-install task because existing execution environments retain their old proxy and sandbox state. If administrator prompts repeat, then require the user to fully quit every Codex desktop window and CLI process before one clean relaunch; alternating old and new loopback proxy port sets can invalidate the global elevated-firewall setup. On other platforms, start a new Codex task or CLI session because an existing execution environment does not retroactively adopt the new profile. Never imply that writing the file changed the current task's permissions.
+After a successful apply, end with a visible activation block. Explain that Custom / 自定义 with `codex-safe-workspace` is selectable but not globally pinned. After selecting it, an explicit UI change to Full Access must activate the built-in `:danger-full-access` profile on the next user message without restarting Codex.
+
+Verify the effective runtime, not only the visible selector. Prefer the task response's activePermissionProfile.id; accept authoritative task metadata that explicitly says danger-full-access when the profile id is unavailable. The codexsandboxonline / codexsandboxoffline username is not proof of permission scope. If the UI says Full Access but runtime metadata still reports the custom/workspace profile, report FAIL: UI/runtime permission mismatch; do not claim Full Access and do not invent a Git backend. In a verified Full Access task, native Git must be able to update the repository's ordinary metadata, including a linked worktree's shared .git, subject only to normal OS ACLs.
+
+After installing or upgrading machine configuration, start one new task so the unpinned profile layout, proxy, and sandbox setup are loaded. This one-time activation boundary is different from ordinary task-level switching: changing the UI permission and sending the next user message must apply the new route without restarting Codex, and the returned runtime profile is the acceptance result. If Windows administrator prompts repeat, require the user to fully quit every Codex desktop window and CLI process before one clean relaunch; alternating old and new loopback proxy port sets can invalidate the global elevated-firewall setup. Never imply that writing the file changed the already-running task before this upgrade boundary.
 
 When Windows `Elevated` is selected, explain that an administrator-approved sandbox setup prompt can appear after relaunch, but it is not expected for each command. Repeated administrator prompts are a failure signal. Run the read-only assessment and inspect only its `WindowsSandboxSetupHealth` result: `Allowlist` expects proxy ports 3128 and 8081, while `Off` and direct `Unrestricted` expect no proxy ports. Aligned latest ports mean historical changes are informational; `CONFLICT` means stale Codex processes should be closed before one clean relaunch. Preserve `Elevated` unless its setup genuinely fails and the user explicitly chooses the weaker fallback.
 
@@ -130,4 +144,4 @@ Run `Rollback-CodexSafety.ps1` without confirmation first so it shows the target
 
 Allow only the installed `New-CodexCheckpoint.ps1` bridge through the exact PowerShell 7 executable and exact script path. Never allow a general `pwsh`, `powershell`, `git`, shell-wrapper, or arbitrary-script prefix.
 
-The bridge must accept only registered repositories, refuse sensitive-looking untracked files, create a hidden Git commit and dedicated ref without changing the branch or index, expose save/list only, and leave restoration user-controlled.
+The recovery bridge must accept only registered repositories and a pinned Git executable. Save creates a hidden checkpoint without changing the branch or real index, and List enumerates those checkpoints. It must not expose Status, Commit, general Git, or a shell escape. Normal status, add, commit, and branch operations remain native Git operations and require a task whose effective permissions actually permit them.

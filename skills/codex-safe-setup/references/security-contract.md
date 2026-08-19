@@ -9,12 +9,14 @@ Codex Safe Setup reduces the consequences of human or agent mistakes by installi
 | Wrong path outside the project | Deny filesystem access outside workspace roots | Sandbox implementation defects remain possible |
 | Deletion inside the project | Hidden Git checkpoint ref | Ignored and refused sensitive files are not captured |
 | Reading credentials outside the project | Root deny plus minimal runtime reads | The runtime-defined minimal set must be trusted |
+| Task-level permission routing | Register the safe profile without pinning `default_permissions`; preserve the UI sandbox route | The user must explicitly select the safe profile when wanted |
+| Task-level Full Access override | Explicit UI selection plus next-turn runtime profile verification | Full Access intentionally removes the local sandbox for that task |
 | Reading project secrets | Workspace-relative deny globs | Unknown filenames need custom deny entries |
 | Shell-based exfiltration | Network off or enforced allowlist | Allowed domains can still receive data; direct unrestricted access removes destination containment |
 | Network prompt injection | Keep command networking narrow and treat remote content as untrusted | Allowed remote content can still manipulate an agent |
 | Malicious or vulnerable downloads | Restrict destinations and review dependency changes | An allowed source can still be compromised |
 | Approval or reviewer error | Hard sandbox boundary | In-boundary actions do not receive extra review |
-| Rule abuse | Exact executable and bridge prefix | Rules are experimental and need upgrade checks |
+| Recovery rule abuse | Exact executable, script, and Save/List action prefix plus bridge-internal validation | Rules are experimental and need upgrade checks |
 
 Web Search, Browser, Computer Use, apps, connectors, plugins, MCP, cloud tasks, source-control remotes, CI credentials, host malware, and credentials exposed before installation are outside the installed command profile. Report them as `NOT CONTROLLED`.
 

@@ -37,8 +37,10 @@ if ($codexCli.Version -and $codexCli.Version -match '(\d+\.\d+\.\d+)') {
     $codexVersionSupported = [version]$Matches[1] -ge [version]'0.138.0'
 }
 
-$fullAccess = $configText -match '(?im)^\s*(sandbox_mode\s*=\s*["'']danger-full-access["'']|approval_policy\s*=\s*["'']never["''])' -and $configText -match '(?im)danger-full-access'
-$profileMatch = [regex]::Match($configText, '(?m)^\s*default_permissions\s*=\s*["'']([^"'']+)["'']')
+$defaultPermissions = Get-CssTomlTopLevelStringValue -Text $configText -Key 'default_permissions'
+$sandboxMode = Get-CssTomlTopLevelStringValue -Text $configText -Key 'sandbox_mode'
+$pinnedManagedDefault = $defaultPermissions -eq $script:CssProfileName
+$fullAccess = $defaultPermissions -eq ':danger-full-access' -or $sandboxMode -eq 'danger-full-access'
 $approvalMatch = [regex]::Match($configText, '(?m)^\s*approval_policy\s*=\s*["'']([^"'']+)["'']')
 $reviewerMatch = [regex]::Match($configText, '(?m)^\s*approvals_reviewer\s*=\s*["'']([^"'']+)["'']')
 $windowsSectionText = Get-CssTomlSectionText -Text $configText -Section 'windows'
@@ -62,8 +64,8 @@ if ($userProfilePath) {
 }
 
 $findings = [Collections.Generic.List[object]]::new()
-if ($fullAccess) { $findings.Add([pscustomobject]@{ Severity = 'HIGH'; Finding = 'Full Access removes the local sandbox boundary.' }) }
-if ($legacy.Present -and $profileMatch.Success) { $findings.Add([pscustomobject]@{ Severity = 'HIGH'; Finding = 'Legacy sandbox keys and permission profiles coexist; legacy settings can take precedence.' }) }
+if ($fullAccess) { $findings.Add([pscustomobject]@{ Severity = 'HIGH'; Finding = 'The configured default is Full Access, which removes the local sandbox boundary.' }) }
+if ($pinnedManagedDefault) { $findings.Add([pscustomobject]@{ Severity = 'HIGH'; Finding = 'codex-safe-workspace is pinned in default_permissions. This conflicts with task-level UI sandbox routing; upgrade to the UI-selectable profile layout.' }) }
 if ($networkEnabled -and -not $networkProxy) { $findings.Add([pscustomobject]@{ Severity = 'HIGH'; Finding = 'Command network is direct and unrestricted; domain rules are not enforced. This is appropriate only when direct protocols are required and unrestricted-network risk was explicitly accepted.' }) }
 if (-not $managedProfile) { $findings.Add([pscustomobject]@{ Severity = 'MEDIUM'; Finding = 'No verified root-deny, workspace-only managed profile was detected.' }) }
 if (-not $codexCli.Present) { $findings.Add([pscustomobject]@{ Severity = 'INFO'; Finding = 'Codex CLI is absent, so rule and version checks will be partial.' }) }
@@ -82,7 +84,11 @@ $report = [pscustomobject]@{
     ConfigPath = $resolvedConfig
     ConfigExists = (Test-Path -LiteralPath $resolvedConfig -PathType Leaf)
     FullAccessDetected = [bool]$fullAccess
-    PermissionProfile = $(if ($profileMatch.Success) { $profileMatch.Groups[1].Value } else { $null })
+    ConfiguredDefaultFullAccess = [bool]$fullAccess
+    PermissionProfile = $defaultPermissions
+    RegisteredPermissionProfile = $(if ($managedProfile) { $script:CssProfileName } else { $null })
+    DynamicUiRoutingReady = [bool]($managedProfile -and -not $pinnedManagedDefault)
+    RuntimePermissionSelection = 'NOT OBSERVED: this config assessment cannot see a task-level UI override; inspect activePermissionProfile or authoritative task permission metadata.'
     ManagedLeastPrivilegeProfile = [bool]$managedProfile
     LegacySettings = $legacy
     ApprovalPolicy = $(if ($approvalMatch.Success) { $approvalMatch.Groups[1].Value } else { $null })
@@ -118,8 +124,9 @@ if ($AsJson) {
 
 Write-Output 'Codex Safe Setup - read-only assessment'
 Write-Output ("Config: {0}" -f $resolvedConfig)
-Write-Output ("Full Access: {0}" -f $report.FullAccessDetected)
-Write-Output ("Permission profile: {0}" -f $(if ($report.PermissionProfile) { $report.PermissionProfile } else { '<not set>' }))
+Write-Output ("Configured default Full Access: {0}" -f $report.ConfiguredDefaultFullAccess)
+Write-Output ("Configured default permission profile: {0}" -f $(if ($report.PermissionProfile) { $report.PermissionProfile } else { '<not set>' }))
+Write-Output ("Registered selectable profile: {0}; dynamic UI routing ready: {1}" -f $(if ($report.RegisteredPermissionProfile) { $report.RegisteredPermissionProfile } else { '<not set>' }), $report.DynamicUiRoutingReady)
 Write-Output ("Approval: {0} / reviewer: {1}" -f $(if ($report.ApprovalPolicy) { $report.ApprovalPolicy } else { '<not set>' }), $(if ($report.ApprovalReviewer) { $report.ApprovalReviewer } else { '<not set>' }))
 Write-Output ("Command network: {0}; proxy: {1}; route: {2}" -f $report.CommandNetworkEnabled, $report.NetworkProxyEnabled, $report.CommandNetworkRoute)
 Write-Output ("Windows sandbox setup: {0} - {1}" -f $sandboxSetupHealth.Status, $sandboxSetupHealth.Evidence)

@@ -1,20 +1,17 @@
-# Recovery and checkpoint bridge
+# Recovery checkpoints
 
-The workspace sandbox keeps `.git` read-only. The optional bridge is copied outside workspace roots and exposed through one exact command rule; it is not a general Git, PowerShell, or shell escape.
+The workspace sandbox keeps .git read-only. The optional recovery bridge is copied outside workspace roots and exposed through one exact command rule. Authorized canonical worktree roots and the installer-pinned Git executable live in CODEX_HOME/safe-setup/authorized-workspaces.json.
 
-It uses a temporary Git index to snapshot tracked changes and ordinary untracked files into a commit under `refs/codex-safe/checkpoints/*`. It does not change the checked-out branch, `HEAD`, the real index, or the working tree.
+- Save uses a temporary index to snapshot tracked changes and ordinary untracked files under refs/codex-safe/checkpoints/* without changing HEAD, the real index, or the working tree.
+- List enumerates those hidden checkpoint refs.
+- The bridge does not expose Status, Commit, general Git, or a shell escape. Normal Git remains native Git and requires an effective task permission profile that permits its metadata writes.
 
-The bridge refuses sensitive-looking untracked paths such as `.env`, private keys, `.npmrc`, and cloud credential files. Add those paths to `.gitignore` or manage them outside the repository instead of bypassing the refusal.
+Save refuses sensitive-looking untracked paths such as .env, private keys, .npmrc, and cloud credential files. Tracked credential-style fixtures can still collide with workspace deny globs; review those files and use only exact read exceptions for known public fixtures. Never disable the deny globs wholesale.
 
-Authorized canonical roots and the installer-pinned Git executable live in `CODEX_HOME/safe-setup/authorized-workspaces.json`. The bridge rejects any other repository and refuses to run if that Git executable's SHA-256 changes. A legitimate Git upgrade therefore requires rerunning the installer.
-
-Inspect a checkpoint with `git show --stat <commit>`. Recover without overwriting the current tree by creating a separate worktree after confirmation: `git worktree add <new-empty-directory> <commit>`.
-
-Never automatically run `reset --hard`, `clean`, branch replacement, or in-place checkout.
-
+Inspect a checkpoint with git show --stat <commit>. Recover without overwriting the current tree by creating a separate worktree after confirmation: git worktree add <new-empty-directory> <commit>. Never automatically run reset --hard, clean, branch replacement, or in-place checkout.
 
 ## Versioned install state
 
-Version 0.1.2 stores schema-versioned active state, transaction-scoped backups, and immutable prior-state snapshots under `CODEX_HOME/safe-setup/state-history`. A configuration upgrade never deletes the prior state. One rollback restores both the prior managed files and its active state, so a second rollback can continue to the preceding installation.
+Version 0.1.6 stores state schema 5. Upgrading removes the plugin-owned global default permission pin while retaining the selectable profile, legacy UI sandbox route, network and approval choices, transaction-scoped backups, and immutable prior-state snapshots under CODEX_HOME/safe-setup/state-history.
 
-Plugin cache state and already-running Codex task state are not part of this chain. Refresh the plugin first, run the configuration upgrade explicitly, then restart Codex and use a new task.
+Plugin cache state and already-running Codex task state are not part of this chain. Refresh the plugin first, run the configuration upgrade explicitly, then use one new task to load the unpinned layout. Later UI permission changes are task-scoped, must apply on the next user message without restarting Codex, and must be verified from the returned runtime profile.

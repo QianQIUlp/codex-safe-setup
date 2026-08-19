@@ -11,7 +11,7 @@ flowchart LR
     C --> D["Plan-only configuration preview"]
     D --> E["Explicit apply confirmation"]
     E --> F["Static and execpolicy verification"]
-    F --> G["Restart and runtime probes"]
+    F --> G["One fresh task, then next-turn UI routing probes"]
     E --> H["Recorded backup and rollback"]
 ```
 
@@ -29,13 +29,15 @@ All three approval modes use the same least-privilege filesystem profile:
 
 Command networking is configured separately as offline with no proxy, proxy-enforced allowlist, or explicitly acknowledged direct unrestricted access with no proxy. The last mode is what enables proxy-unaware native protocols such as OpenSSH.
 
+The installer registers `codex-safe-workspace` as a selectable Custom profile and deliberately does not set it in `default_permissions`. This leaves the desktop's task-level sandbox route free to switch between bounded access and Full Access; Full Access is accepted only when the returned `activePermissionProfile` is `:danger-full-access` (or equivalent authoritative task metadata).
+
 ### 3. Preview and apply
 
-`Install-CodexSafety.ps1 -PlanOnly` shows the exact managed targets and decisions without changing them. Applying requires `-ConfirmApply -NonInteractive`. High-risk or administrator-backed choices require additional acknowledgements. Legacy sandbox migration is rejected unless `-MigrateLegacySettings` is present.
+`Install-CodexSafety.ps1 -PlanOnly` shows the exact managed targets and decisions without changing them. Applying requires `-ConfirmApply -NonInteractive`. High-risk or administrator-backed choices require additional acknowledgements. `-MigrateLegacySettings` remains accepted for compatibility, but legacy sandbox settings are preserved for UI routing.
 
 The installer preserves unrelated TOML content, backs up each managed target, writes the permission profile and rule, registers authorized workspace roots, installs a synthetic outside-workspace canary, and records rollback state.
 
-On Windows, writing the configuration is not the activation boundary. Restart Codex and use a new task because an existing execution environment retains its original sandbox and proxy state. If administrator prompts repeat, close every Codex desktop and CLI process before one clean relaunch. The preferred `Elevated` sandbox may request administrator-approved OS setup, but it does not elevate each workspace command.
+Writing the machine configuration is not the activation boundary. Start one new task after install or upgrade so the unpinned layout and network setup are loaded. After that boundary, changing the task UI and sending the next user message must change permissions without restarting Codex. If Windows administrator prompts repeat, close every Codex desktop and CLI process before one clean relaunch. The preferred `Elevated` sandbox may request administrator-approved OS setup, but it does not elevate each workspace command.
 
 The Windows sandbox stores firewall setup for the active network route. `Allowlist` expects loopback proxy ports 3128 and 8081; `Off` and direct `Unrestricted` expect no proxy ports. If an older task and a newly configured task use different port sets, each can invalidate the other's global setup and cause another administrator prompt. The read-only assessment retains only matching firewall port-change records from Codex's sandbox log and reports `WindowsSandboxSetupHealth`; it never includes logged command lines. A `CONFLICT` means the latest setup does not match the selected mode. `OSCILLATION_HISTORY` means a direct reversal occurred but the latest setup is aligned, so verification passes and no action is required unless prompts recur.
 
@@ -43,13 +45,15 @@ The Windows sandbox stores firewall setup for the active network route. `Allowli
 
 `Upgrade-CodexSafety.ps1` reads the active install state and preserves its recorded selections by default. Running it without `-ConfirmUpgrade` is plan-only. A confirmed upgrade creates a unique transaction directory under `safe-setup/backups`, snapshots the previous active state under `safe-setup/state-history`, and then invokes the same deterministic installer in explicit upgrade mode.
 
-The plugin bundle, applied machine configuration, install-state history, and already-running task are separate layers. Refreshing or reinstalling the plugin changes only the first layer. The configuration upgrade changes the second and third layers after review. A full restart and fresh task activate the fourth.
+Version 0.1.5 also removes the alternate Status/Commit Git backend and rewrites old workspace registries to the Save/List-only recovery schema. The plugin bundle, applied machine configuration, install-state history, and already-running task are separate layers. Refreshing or reinstalling the plugin changes only the first layer. The configuration upgrade changes the second and third layers after review. A full restart and fresh task activate the fourth.
+
+Version 0.1.6 removes only the plugin-owned `default_permissions = "codex-safe-workspace"` pin, preserves any different user-owned default plus the UI sandbox settings, and records the UI-selectable activation model in state schema 5. This fixes the configuration layer that caused task permission changes to fall back to the custom profile.
 
 ### 5. Verify
 
 `Test-CodexSafety.ps1` checks the generated configuration and, when a compatible CLI is available, calls `codex execpolicy check` against both allowed and deliberately broad command prefixes. Missing CLI verification produces `PARTIAL`, never a false `PASS`.
 
-Runtime checks are route-specific and require a new task: `Off` proves a reachable endpoint is blocked; `Allowlist` proves an allowed domain succeeds through the proxy while an unlisted domain fails; `Unrestricted` proves native direct TCP or OpenSSH works without treating a proxy-only banner as sufficient.
+Runtime checks are route-specific and require one new task after machine-configuration changes: Off proves a reachable endpoint is blocked; Allowlist proves an allowed domain succeeds through the proxy while an unlisted domain fails; Unrestricted proves native direct TCP or OpenSSH works without treating a proxy-only banner as sufficient. Task permission checks are separate: switching to Full Access and sending the next message must report `activePermissionProfile.id = :danger-full-access` without a Codex restart, and the codexsandboxonline/offline account name is not evidence.
 
 ### 6. Roll back
 
@@ -59,17 +63,13 @@ Runtime checks are route-specific and require a new task: `Off` proves a reachab
 
 The workspace sandbox intentionally protects `.git`. The optional bridge is copied to `CODEX_HOME/safe-setup/bin` and is the only PowerShell script allowed by the generated command rule. The rule matches the exact PowerShell 7 executable and exact bridge path; it does not allow a general `pwsh`, `powershell`, `git`, shell wrapper, or arbitrary script.
 
-For `Save`, the bridge:
+Every action resolves a canonical worktree root, checks authorized-workspaces.json, and verifies the pinned Git executable hash.
 
-1. Resolves the requested repository to a canonical path.
-2. Confirms it is present in `authorized-workspaces.json`.
-3. Confirms the configured Git executable still has its pinned SHA-256.
-4. Refuses sensitive-looking untracked paths.
-5. Uses a temporary Git index to build a tree and commit.
-6. Stores the commit under `refs/codex-safe/checkpoints/*`.
-7. Removes the temporary index.
+- Save refuses sensitive-looking untracked paths, builds a temporary index, and stores a hidden checkpoint under refs/codex-safe/checkpoints/*. The current branch, real index, and working tree remain unchanged.
+- List enumerates checkpoint refs.
+- Status and Commit are intentionally unavailable. Normal Git operations remain native Git and require a task whose effective permissions allow repository-metadata writes.
 
-The current branch, `HEAD`, real index, and working tree are unchanged. The bridge exposes only `Save` and `List`. Recovery stays user-controlled and should normally use a separate worktree:
+The bridge is not a general Git escape. Recovery from `Save` remains user-controlled and should normally use a separate worktree:
 
 ```powershell
 git worktree add <new-empty-directory> <checkpoint-commit>
@@ -82,9 +82,9 @@ Exact locations depend on `CODEX_HOME`, which defaults to the normal Codex user 
 | Target | Purpose |
 |---|---|
 | `config.toml` | Active permission, approval, sandbox, and network selections |
-| `rules/codex-safe-setup.rules` | Exact checkpoint command rule |
+| `rules/codex-safe-setup.rules` | Exact status/checkpoint/opt-in commit bridge rule |
 | `safe-setup/bin/New-CodexCheckpoint.ps1` | Installed narrow checkpoint bridge |
-| `safe-setup/authorized-workspaces.json` | Canonical workspace roots and pinned Git |
+| `safe-setup/authorized-workspaces.json` | Canonical roots, commit-enabled roots, allowed branch prefixes, and pinned Git |
 | `safe-setup/backups/<transaction>/*` | Restore material isolated by install or upgrade transaction |
 | `safe-setup/state-history/*` | Immutable prior-state snapshots and rolled-back state records |
 | `safe-setup/outside-workspace-canary.txt` | Synthetic target for boundary testing |
