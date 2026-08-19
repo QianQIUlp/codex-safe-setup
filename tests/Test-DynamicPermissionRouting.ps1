@@ -214,8 +214,13 @@ try {
 finally {
     if ($appProcess) {
         try {
-            if (-not $appProcess.HasExited) { $appProcess.Kill($true) }
-            $appProcess.WaitForExit(5000) | Out-Null
+            if (-not $appProcess.HasExited) {
+                try { $appProcess.StandardInput.Close() } catch {}
+                if (-not $appProcess.WaitForExit(10000)) {
+                    $appProcess.Kill($true)
+                    $appProcess.WaitForExit(5000) | Out-Null
+                }
+            }
         }
         catch {}
         $appProcess.Dispose()
