@@ -26,29 +26,56 @@ else {
     $profileSectionText = Get-CssTomlSectionText -Text $configText -Section 'permissions.codex-safe-workspace'
     $filesystemSectionText = Get-CssTomlSectionText -Text $configText -Section 'permissions.codex-safe-workspace.filesystem'
     $workspaceSectionText = Get-CssTomlSectionText -Text $configText -Section 'permissions.codex-safe-workspace.filesystem.":workspace_roots"'
+    $offlineFilesystemSectionText = Get-CssTomlSectionText -Text $configText -Section 'permissions.codex-safe-workspace-offline.filesystem'
+    $offlineWorkspaceSectionText = Get-CssTomlSectionText -Text $configText -Section 'permissions.codex-safe-workspace-offline.filesystem.":workspace_roots"'
     $profileSettings = Get-CssPermissionProfileSettings -Text $configText
-    $sandboxModeMatch = [regex]::Match($configText, '(?m)^\s*sandbox_mode\s*=\s*["'']([^"'']+)["'']')
-    $permissionRouting = if ($state -and $state.PSObject.Properties['PermissionRouting']) { [string]$state.PermissionRouting } elseif ($sandboxModeMatch.Success -and -not $profileSettings.DefaultPresent) { 'DynamicUi' } else { 'StrictProfile' }
+    $sandboxModeSetting = Get-CssTomlTopLevelStringValue -Text $configText -Key 'sandbox_mode'
+    $legacy = Test-CssLegacySettings -Text $configText
+    $permissionConfigurationConflict = $legacy.Present -and $profileSettings.DefaultPresent
+    $stateRouting = if ($state -and $state.PSObject.Properties['PermissionRouting']) { [string]$state.PermissionRouting } else { $null }
+    $profileHasExplicitDeny = ($filesystemSectionText + [Environment]::NewLine + $workspaceSectionText + [Environment]::NewLine + $offlineFilesystemSectionText + [Environment]::NewLine + $offlineWorkspaceSectionText) -match '(?m)^\s*[^#\r\n]+?\s*=\s*"deny"\s*$'
+    $dynamicUiDenyMergeRisk = $profileSettings.ManagedProfilePresent -and $profileHasExplicitDeny -and ($stateRouting -eq 'DynamicUi' -or $profileSettings.DefaultProfile -in @(':read-only', ':workspace', ':danger-full-access'))
+    $permissionRouting = if ($permissionConfigurationConflict -or $dynamicUiDenyMergeRisk) { 'Conflict' } elseif ($stateRouting) { $stateRouting } elseif (-not $legacy.Present -and $profileSettings.DefaultPresent -and -not $profileHasExplicitDeny) { 'DynamicUi' } else { 'StrictProfile' }
 
-    if ($permissionRouting -eq 'DynamicUi') {
-        $dynamicReady = $sandboxModeMatch.Success -and -not $profileSettings.DefaultPresent -and -not $profileSettings.ManagedProfilePresent
-        $knownSandboxMode = $sandboxModeMatch.Success -and $sandboxModeMatch.Groups[1].Value -in @('read-only', 'workspace-write', 'danger-full-access')
-        $checks.Add((New-CssCheck -Status $(if ($dynamicReady) { 'PASS' } else { 'FAIL' }) -Control 'Dynamic UI routing' -Evidence 'DynamicUi requires sandbox_mode with no default_permissions pin and no codex-safe-workspace profile.'))
-        $checks.Add((New-CssCheck -Status $(if ($knownSandboxMode) { 'PASS' } else { 'FAIL' }) -Control 'Fallback sandbox' -Evidence 'The persisted UI fallback must be read-only, workspace-write, or danger-full-access.'))
-        $checks.Add((New-CssCheck -Status PARTIAL -Control 'Reads outside workspace' -Evidence 'DynamicUi uses legacy workspace semantics so strict root deny-read enforcement is intentionally unavailable.'))
-        $checks.Add((New-CssCheck -Status PARTIAL -Control 'Workspace secret reads' -Evidence 'Credential deny-globs require StrictProfile and are intentionally unavailable in DynamicUi.'))
-        $checks.Add((New-CssCheck -Status PASS -Control 'Configuration precedence' -Evidence 'No named profile is pinned over the task UI sandboxPolicy route.'))
+    if ($permissionRouting -eq 'Conflict') {
+        $conflictEvidence = if ($dynamicUiDenyMergeRisk) { 'CONFLICT: DynamicUi Custom contains an explicit filesystem deny that Codex preserves when switching to Full Access.' } else { 'CONFLICT: legacy sandbox settings and default_permissions coexist; the UI selection and configured default are not authoritative.' }
+        $checks.Add((New-CssCheck -Status FAIL -Control 'Permission routing' -Evidence $conflictEvidence))
+        $checks.Add((New-CssCheck -Status FAIL -Control 'Configuration precedence' -Evidence 'CONFLICT: DynamicUi must use only its dual positive-only named-profile family; StrictProfile must use only its strict named profile. Legacy sandbox settings cannot coexist.'))
+        $checks.Add((New-CssCheck -Status FAIL -Control 'Full Access' -Evidence 'A danger-full-access value in a mixed configuration is only a request; effective Full Access is not established.'))
+    }
+    elseif ($permissionRouting -eq 'DynamicUi') {
+        $stableCustomShape = -not $legacy.Present -and $profileSettings.DefaultProfile -eq ':workspace' -and $profileSettings.ManagedProfilePresent -and $profileSettings.OfflineProfilePresent -and -not $profileHasExplicitDeny
+        $checks.Add((New-CssCheck -Status $(if ($stableCustomShape) { 'PASS' } else { 'FAIL' }) -Control 'Dynamic UI routing' -Evidence 'DynamicUi requires built-in Workspace as startup default and exactly two plugin-owned positive-only named profiles.'))
+        $checks.Add((New-CssCheck -Status $(if ($stableCustomShape) { 'PASS' } else { 'FAIL' }) -Control 'Stable Custom display route' -Evidence 'Two named profiles disable the affected Desktop single-profile fallback; removing legacy sandbox keys prevents a generic Custom fallback.'))
+        $checks.Add((New-CssCheck -Status $(if ($profileSettings.ManagedProfilePresent -and $profileSettings.OfflineProfilePresent) { 'PASS' } else { 'FAIL' }) -Control 'Visible Custom modes' -Evidence 'Both codex-safe-workspace and codex-safe-workspace-offline must remain selectable.'))
+        $checks.Add((New-CssCheck -Status PARTIAL -Control 'Reads outside workspace' -Evidence 'DynamicUi Custom follows the built-in workspace sandbox read scope; StrictProfile is required for explicit root deny-read.'))
+        $checks.Add((New-CssCheck -Status PARTIAL -Control 'Workspace secret reads' -Evidence 'DynamicUi intentionally installs no credential deny-globs because they would interfere with later Full Access.'))
+        $checks.Add((New-CssCheck -Status $(if (-not $legacy.Present) { 'PASS' } else { 'FAIL' }) -Control 'Configuration precedence' -Evidence 'DynamicUi uses only permission profiles and installs no legacy sandbox routing keys.'))
+        $codexCommand = Get-Command codex -ErrorAction SilentlyContinue | Select-Object -First 1
+        $catalogCompatibilityStatus = 'PARTIAL'
+        $catalogCompatibilityEvidence = 'Codex CLI is unavailable, so 0.138.0 Custom catalog compatibility was not verified.'
+        if ($codexCommand) {
+            $codexVersionText = (& $codexCommand.Source --version 2>$null | Select-Object -First 1)
+            if ($codexVersionText -and $codexVersionText.ToString() -match '(\d+\.\d+\.\d+)') {
+                $detectedCodexVersion = [version]$Matches[1]
+                $catalogCompatibilityStatus = if ($detectedCodexVersion -ge [version]'0.138.0') { 'PASS' } else { 'FAIL' }
+                $catalogCompatibilityEvidence = "DynamicUi requires Codex CLI 0.138.0 or newer; detected $detectedCodexVersion."
+            }
+            else {
+                $catalogCompatibilityEvidence = 'The detected Codex CLI version could not be parsed, so 0.138.0 Custom catalog compatibility was not verified.'
+            }
+        }
+        $checks.Add((New-CssCheck -Status $catalogCompatibilityStatus -Control 'Dynamic UI catalog compatibility' -Evidence $catalogCompatibilityEvidence))
     }
     else {
-        $checks.Add((New-CssCheck -Status $(if ($configText -match '(?m)^\s*default_permissions\s*=\s*"codex-safe-workspace"') { 'PASS' } else { 'FAIL' }) -Control 'Active profile' -Evidence 'StrictProfile requires default_permissions = codex-safe-workspace.'))
+        $checks.Add((New-CssCheck -Status $(if ($profileSettings.DefaultProfile -eq 'codex-safe-workspace') { 'PASS' } else { 'FAIL' }) -Control 'Active profile' -Evidence 'StrictProfile requires default_permissions = codex-safe-workspace.'))
         $checks.Add((New-CssCheck -Status $(if ($filesystemSectionText -match '(?m)^\s*":root"\s*=\s*"deny"') { 'PASS' } else { 'FAIL' }) -Control 'Reads outside workspace' -Evidence 'root deny is present in the active managed filesystem table'))
         $checks.Add((New-CssCheck -Status $(if ($filesystemSectionText -match '(?m)^\s*":minimal"\s*=\s*"read"') { 'PASS' } else { 'FAIL' }) -Control 'Minimal runtime reads' -Evidence 'minimal runtime read grant is present in the active managed filesystem table'))
         $checks.Add((New-CssCheck -Status $(if ($workspaceSectionText -match '(?m)^\s*"\."\s*=\s*"write"') { 'PASS' } else { 'FAIL' }) -Control 'Workspace writes' -Evidence 'workspace root write grant is present in the active managed workspace table'))
         $checks.Add((New-CssCheck -Status $(if ($workspaceSectionText -match '(?m)^\s*"\*\*/\.env"\s*=\s*"deny"') { 'PASS' } else { 'PARTIAL' }) -Control 'Workspace secret reads' -Evidence 'common credential deny globs are in the active managed workspace table'))
         $checks.Add((New-CssCheck -Status $(if ($profileSectionText -match '(?m)^\s*extends\s*=\s*":workspace"') { 'PASS' } else { 'FAIL' }) -Control 'Protected metadata' -Evidence 'The managed profile inherits .git, .codex, and .agents protection from :workspace'))
-        $legacy = Test-CssLegacySettings -Text $configText
         $checks.Add((New-CssCheck -Status $(if ($legacy.Present) { 'FAIL' } else { 'PASS' }) -Control 'Configuration precedence' -Evidence 'legacy sandbox settings must not override StrictProfile'))
-        $activeFullAccess = $configText -match '(?m)^\s*(default_permissions|sandbox_mode)\s*=\s*["'']:?danger-full-access["'']'
+        $activeFullAccess = $profileSettings.DefaultProfile -eq ':danger-full-access' -or $sandboxModeSetting.Value -eq 'danger-full-access'
         $checks.Add((New-CssCheck -Status $(if ($activeFullAccess) { 'FAIL' } else { 'PASS' }) -Control 'Full Access' -Evidence 'No active top-level danger-full-access selection was found'))
     }
 }
@@ -63,15 +90,15 @@ if ($state) {
         $checks.Add((New-CssCheck -Status $(if ($historyOkay) { 'PASS' } else { 'FAIL' }) -Control 'Upgrade rollback chain' -Evidence 'An upgrade must retain an immutable previous-state snapshot.'))
     }
 
-    $approvalExpected = if ($state.ApprovalMode -eq 'BoundedAutonomy') { 'never' } else { 'on-request' }
-    $approvalOkay = $configText -match ('(?m)^\s*approval_policy\s*=\s*"' + [regex]::Escape($approvalExpected) + '"')
-    $checks.Add((New-CssCheck -Status $(if ($approvalOkay) { 'PASS' } else { 'FAIL' }) -Control 'Approval policy' -Evidence "Expected $approvalExpected for $($state.ApprovalMode)"))
-
     $statePermissionRouting = if ($state.PSObject.Properties['PermissionRouting']) { [string]$state.PermissionRouting } else { 'StrictProfile' }
-    $networkSectionText = if ($statePermissionRouting -eq 'DynamicUi') { Get-CssTomlSectionText -Text $configText -Section 'sandbox_workspace_write' } else { Get-CssTomlSectionText -Text $configText -Section 'permissions.codex-safe-workspace.network' }
+    $approvalExpected = if ($state.ApprovalMode -eq 'BoundedAutonomy') { 'never' } else { 'on-request' }
+    $approvalOkay = if ($statePermissionRouting -eq 'DynamicUi') { $configText -notmatch '(?m)^\s*(approval_policy|approvals_reviewer)\s*=' } else { $configText -match ('(?m)^\s*approval_policy\s*=\s*"' + [regex]::Escape($approvalExpected) + '"') }
+    $checks.Add((New-CssCheck -Status $(if ($approvalOkay) { 'PASS' } else { 'FAIL' }) -Control 'Approval policy' -Evidence $(if ($statePermissionRouting -eq 'DynamicUi') { 'DynamicUi leaves approval behavior to the selected permission profile so config cannot create a generic Custom fallback.' } else { "Expected $approvalExpected for $($state.ApprovalMode)" })))
+
+    $networkSectionText = Get-CssTomlSectionText -Text $configText -Section 'permissions.codex-safe-workspace.network'
     $networkDomainsSectionText = if ($statePermissionRouting -eq 'DynamicUi') { '' } else { Get-CssTomlSectionText -Text $configText -Section 'permissions.codex-safe-workspace.network.domains' }
     $featuresSectionText = Get-CssTomlSectionText -Text $configText -Section 'features'
-    $networkEnabled = if ($statePermissionRouting -eq 'DynamicUi') { $networkSectionText -match '(?m)^\s*network_access\s*=\s*true' } else { $networkSectionText -match '(?m)^\s*enabled\s*=\s*true' }
+    $networkEnabled = $networkSectionText -match '(?m)^\s*enabled\s*=\s*true'
     $proxyEnabled = $featuresSectionText -match '(?m)^\s*network_proxy\s*=\s*true'
     $hasDomainRules = -not [string]::IsNullOrWhiteSpace($networkDomainsSectionText)
     $configuredDomains = @([regex]::Matches($networkDomainsSectionText, '(?m)^\s*"(?<domain>[^"]+)"\s*=\s*"allow"\s*$') | ForEach-Object { $_.Groups['domain'].Value } | Sort-Object -Unique)
@@ -179,8 +206,8 @@ else {
     'A fresh task must prove a direct TCP connection succeeds with a native client such as Test-NetConnection or OpenSSH; a proxy-only banner is not sufficient'
 }
 $checks.Add((New-CssCheck -Status PARTIAL -Control 'Runtime command egress' -Evidence $runtimeNetworkEvidence))
-$checks.Add((New-CssCheck -Status PARTIAL -Control 'Runtime filesystem enforcement' -Evidence 'Restart Codex and run a new task with the intended profile to prove OS filesystem enforcement; fully quit all Codex processes only if administrator prompts repeat'))
-$checks.Add((New-CssCheck -Status PARTIAL -Control 'Task permission selection' -Evidence 'For DynamicUi, a Full Access UI change must produce sandboxPolicy.type = dangerFullAccess on the next user message in the same task; switching back must update the following message. The codexsandboxonline/offline account name is not permission evidence.'))
+$checks.Add((New-CssCheck -Status PARTIAL -Control 'Runtime filesystem enforcement' -Evidence 'Start one fresh task after a machine-configuration change and run the intended profile probes; fully quit all Codex processes only if administrator prompts repeat.'))
+$checks.Add((New-CssCheck -Status PARTIAL -Control 'Task permission selection' -Evidence 'Run Test-DesktopPermissionE2E.ps1: direct observation must prove each clicked label stays stable, while real next-turn metadata and an outside-workspace canary separately prove codex-safe-workspace -> Full Access -> built-in Workspace without restart. Settings echoes and codexsandbox account names are not permission evidence.'))
 $checks.Add((New-CssCheck -Status 'NOT CONTROLLED' -Control 'Other egress surfaces' -Evidence 'Web Search, Browser, Computer Use, apps, plugins, MCP, and cloud tasks use separate controls'))
 
 $overall = if (@($checks | Where-Object Status -eq 'FAIL').Count -gt 0) { 'FAILED' } elseif (@($checks | Where-Object Status -eq 'PARTIAL').Count -gt 0) { 'PARTIALLY VERIFIED' } else { 'VERIFIED' }

@@ -71,6 +71,31 @@ try {
         if ($entryNames -notcontains 'skills/codex-safe-setup/scripts/Upgrade-CodexSafety.ps1') {
             throw 'Built archive is missing the versioned upgrade entry point.'
         }
+        if ($entryNames -notcontains 'skills/codex-safe-setup/scripts/Test-DesktopPermissionE2E.ps1') {
+            throw 'Built archive is missing the real Desktop end-to-end verifier.'
+        }
+        foreach ($requiredEntry in @(
+            'skills/codex-safe-setup/scripts/Install-DesktopPermissionSelectorFix.ps1',
+            'skills/codex-safe-setup/scripts/Test-DesktopPermissionSelectorFix.ps1',
+            'skills/codex-safe-setup/scripts/Rollback-DesktopPermissionSelectorFix.ps1',
+            'skills/codex-safe-setup/assets/desktop-permission-selector/permission-selector-loader.cjs',
+            'skills/codex-safe-setup/assets/desktop-permission-selector/permission-selector-preload.cjs',
+            'skills/codex-safe-setup/assets/desktop-permission-selector/Start-CodexFixed.ps1',
+            'skills/codex-safe-setup/assets/desktop-permission-selector/Watch-CodexDesktop.ps1',
+            'skills/codex-safe-setup/assets/desktop-permission-selector/Recertify-CodexDesktop.ps1',
+            'skills/codex-safe-setup/scripts/DesktopPermissionSelector.Common.ps1'
+        )) {
+            if ($entryNames -notcontains $requiredEntry) {
+                throw "Built archive is missing Desktop compatibility source: $requiredEntry"
+            }
+        }
+        $forbiddenClientEntries = @($entryNames | Where-Object {
+            $_ -match '(?i)(?:^|/)(?:ChatGPT\.exe|codex\.exe|app\.asar)$' -or
+            $_ -match '(?i)\.(?:asar|msix|msixbundle|exe|dll|node)$'
+        })
+        if ($forbiddenClientEntries.Count -gt 0) {
+            throw "Built archive contains forbidden client binaries: $($forbiddenClientEntries -join ', ')"
+        }
     }
     finally {
         $archive.Dispose()

@@ -77,20 +77,38 @@ if (-not [string]::Equals($resolvedState, $expectedState, $pathComparison)) {
 $existingConfig = Read-CssText -Path $resolvedConfig
 $legacy = Test-CssLegacySettings -Text $existingConfig
 $permissionProfileSettings = Get-CssPermissionProfileSettings -Text $existingConfig
+$existingSandboxModeSetting = Get-CssTomlTopLevelStringValue -Text $existingConfig -Key 'sandbox_mode'
 
+$codexCompatibilityError = $null
+$codexCompatibility = 'Not checked'
 $codexCommandForVersion = Get-Command codex -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($PermissionRouting -eq 'DynamicUi' -and -not $codexCommandForVersion) {
+    $codexCompatibility = 'BLOCKED FOR APPLY: Codex CLI 0.138.0 or newer was not detected.'
+    $codexCompatibilityError = 'DynamicUi requires a detected Codex CLI 0.138.0 or newer. Install or expose a compatible Codex CLI before applying.'
+}
 if ($codexCommandForVersion) {
     $codexVersionText = (& $codexCommandForVersion.Source --version 2>$null | Select-Object -First 1)
-    if ($codexVersionText -and $codexVersionText.ToString() -match '(\d+\.\d+\.\d+)' -and [version]$Matches[1] -lt [version]'0.138.0') {
-        throw "Codex CLI $($Matches[1]) is too old for the managed permission-profile format. Update Codex or use a compatible installer version."
+    if ($codexVersionText -and $codexVersionText.ToString() -match '(\d+\.\d+\.\d+)') {
+        $codexVersion = [version]$Matches[1]
+        if ($codexVersion -lt [version]'0.138.0') {
+            $codexCompatibility = "BLOCKED FOR APPLY: detected Codex CLI $codexVersion; permission profiles require 0.138.0 or newer."
+            $codexCompatibilityError = "Codex CLI $codexVersion is too old for the managed permission-profile format. Update Codex or use a compatible installer version."
+        }
+        else {
+            $codexCompatibility = "Compatible: detected Codex CLI $codexVersion."
+        }
+    }
+    elseif ($PermissionRouting -eq 'DynamicUi') {
+        $codexCompatibility = 'BLOCKED FOR APPLY: the detected Codex CLI version could not be parsed.'
+        $codexCompatibilityError = 'DynamicUi could not verify the detected Codex CLI version. Version 0.138.0 or newer is required.'
     }
 }
 
 if ($PermissionRouting -eq 'StrictProfile' -and $legacy.Present -and -not $MigrateLegacySettings) {
     throw 'Legacy sandbox settings are present. Review the plan and rerun with -MigrateLegacySettings to replace them with the strict permission profile after backup.'
 }
-if ($PermissionRouting -eq 'DynamicUi' -and $permissionProfileSettings.DefaultPresent -and $permissionProfileSettings.DefaultProfile -ne $script:CssProfileName -and -not $MigrateLegacySettings) {
-    throw "DynamicUi routing must remove default_permissions so the task UI can own the next-turn sandbox route. Review the plan and rerun with -MigrateLegacySettings to remove the existing '$($permissionProfileSettings.DefaultProfile)' default after backup."
+if ($PermissionRouting -eq 'DynamicUi' -and ($legacy.Present -or $permissionProfileSettings.DefaultPresent -or $permissionProfileSettings.ManagedProfilePresent -or $permissionProfileSettings.OfflineProfilePresent) -and -not $MigrateLegacySettings) {
+    throw 'DynamicUi must replace the previous permission-routing shape with the dual named-profile display route. Review the plan and rerun with -MigrateLegacySettings after backup.'
 }
 if ($PermissionRouting -eq 'DynamicUi' -and $NetworkMode -eq 'Allowlist') {
     throw 'DynamicUi routing cannot guarantee pure Full Access while a persistent filtering proxy is active. Choose Off or Unrestricted, or use StrictProfile when an allowlist is mandatory.'
@@ -115,9 +133,9 @@ $unrestrictedRiskSummary = @(
 ) -join ' '
 
 $dynamicUiRiskSummary = @(
-    'DynamicUi routing uses the legacy sandboxPolicy path because current Desktop builds can keep a named permission profile pinned across UI changes.'
-    'The workspace fallback can restrict writes and command networking, but it reads the filesystem with legacy workspace semantics and cannot enforce the strict profile credential deny-globs.'
-    'Use StrictProfile instead when deny-read protection matters more than same-task Full Access switching.'
+    'DynamicUi uses two positive-only named profiles and a built-in Workspace startup default. This avoids both old Desktop display fallbacks: a sole named profile and a generic config.toml Custom mode.'
+    'codex-safe-workspace uses the selected command-network setting; codex-safe-workspace-offline is a real offline compatibility choice. Filesystem reads follow the built-in workspace sandbox and are broader than StrictProfile.'
+    'DynamicUi cannot enforce credential deny-globs inside a writable workspace. Full Access and the built-in Workspace profile retain their own documented scopes.'
 ) -join ' '
 
 $approvalPolicy = 'never'
@@ -126,28 +144,22 @@ if ($ApprovalMode -eq 'AskMe') { $approvalPolicy = 'on-request' }
 if ($ApprovalMode -eq 'AutoReview') { $approvalPolicy = 'on-request'; $approvalReviewer = 'auto_review' }
 
 $newConfig = Remove-CssManagedBlock -Text $existingConfig
-$newConfig = Remove-CssTomlSections -Text $newConfig -SectionPrefixes @("permissions.$($script:CssProfileName)", 'features.network_proxy')
-$newConfig = Set-CssTomlTopLevelValue -Text $newConfig -Key 'approval_policy' -Literal (ConvertTo-CssTomlString $approvalPolicy)
-$newConfig = Set-CssTomlTopLevelValue -Text $newConfig -Key 'approvals_reviewer' -Literal (ConvertTo-CssTomlString $approvalReviewer)
+$newConfig = Remove-CssTomlSections -Text $newConfig -SectionPrefixes @("permissions.$($script:CssProfileName)", "permissions.$($script:CssOfflineProfileName)", 'features.network_proxy')
 $newConfig = Remove-CssTomlSectionKeys -Text $newConfig -Section 'features' -Keys @('network_proxy')
 
-$effectiveProtectWorkspaceSecrets = [bool]($PermissionRouting -eq 'StrictProfile' -and $ProtectWorkspaceSecrets)
+$effectiveProtectWorkspaceSecrets = $PermissionRouting -eq 'StrictProfile' -and [bool]$ProtectWorkspaceSecrets
 $proxyEnabled = $PermissionRouting -eq 'StrictProfile' -and $NetworkMode -eq 'Allowlist'
 $managedLines = [Collections.Generic.List[string]]::new()
 $managedLines.Add($script:CssManagedStart)
 $managedLines.Add('# Generated by Install-CodexSafety.ps1. Re-run the installer instead of editing this block.')
 
 if ($PermissionRouting -eq 'DynamicUi') {
-    $newConfig = Remove-CssTomlTopLevelKeys -Text $newConfig -Keys @('default_permissions')
-    if ($newConfig -notmatch '(?m)^\s*sandbox_mode\s*=') {
-        $newConfig = Set-CssTomlTopLevelValue -Text $newConfig -Key 'sandbox_mode' -Literal '"workspace-write"'
-    }
-    $newConfig = Set-CssTomlSectionValue -Text $newConfig -Section 'sandbox_workspace_write' -Key 'network_access' -Literal $(if ($NetworkMode -eq 'Off') { 'false' } else { 'true' })
-    $newConfig = Set-CssTomlSectionValue -Text $newConfig -Section 'sandbox_workspace_write' -Key 'exclude_tmpdir_env_var' -Literal $(if ($AllowTempWrite) { 'false' } else { 'true' })
-    $newConfig = Set-CssTomlSectionValue -Text $newConfig -Section 'sandbox_workspace_write' -Key 'exclude_slash_tmp' -Literal $(if ($AllowTempWrite) { 'false' } else { 'true' })
+    $newConfig = Remove-CssTomlTopLevelKeys -Text $newConfig -Keys @('approval_policy', 'approvals_reviewer', 'sandbox_mode')
+    $newConfig = Remove-CssTomlSections -Text $newConfig -SectionPrefixes @('sandbox_workspace_write')
+    $newConfig = Set-CssTomlTopLevelValue -Text $newConfig -Key 'default_permissions' -Literal '":workspace"'
     $newConfig = Set-CssTomlSectionValue -Text $newConfig -Section 'features' -Key 'network_proxy' -Literal 'false'
-    $managedLines.Add('# DynamicUi: sandbox_mode is the fallback; a task UI sandboxPolicy update owns subsequent turns.')
-    $managedLines.Add('# This compatibility route deliberately has no named default_permissions profile.')
+    $managedLines.Add('# DynamicUi: two positive-only named profiles keep runtime switching free of sticky denies.')
+    $managedLines.Add('# Visible Desktop label stability is verified and, when needed, repaired through a separate compatibility layer.')
 }
 else {
     if ($MigrateLegacySettings) {
@@ -155,7 +167,34 @@ else {
         $newConfig = Remove-CssTomlSections -Text $newConfig -SectionPrefixes @('sandbox_workspace_write')
     }
     $newConfig = Set-CssTomlTopLevelValue -Text $newConfig -Key 'default_permissions' -Literal (ConvertTo-CssTomlString $script:CssProfileName)
+    $newConfig = Set-CssTomlTopLevelValue -Text $newConfig -Key 'approval_policy' -Literal (ConvertTo-CssTomlString $approvalPolicy)
+    $newConfig = Set-CssTomlTopLevelValue -Text $newConfig -Key 'approvals_reviewer' -Literal (ConvertTo-CssTomlString $approvalReviewer)
     $newConfig = Set-CssTomlSectionValue -Text $newConfig -Section 'features' -Key 'network_proxy' -Literal $(if ($proxyEnabled) { 'true' } else { 'false' })
+}
+
+if ($PermissionRouting -eq 'DynamicUi') {
+    foreach ($dynamicProfile in @(
+        [pscustomobject]@{ Name = $script:CssProfileName; Network = ($NetworkMode -ne 'Off') },
+        [pscustomobject]@{ Name = $script:CssOfflineProfileName; Network = $false }
+    )) {
+        $managedLines.Add("[permissions.$($dynamicProfile.Name)]")
+        $managedLines.Add('extends = ":workspace"')
+        $managedLines.Add('')
+        $managedLines.Add("[permissions.$($dynamicProfile.Name).filesystem]")
+        $managedLines.Add('":minimal" = "read"')
+        $managedLines.Add('')
+        $managedLines.Add(('[permissions.{0}.filesystem.":workspace_roots"]' -f $dynamicProfile.Name))
+        $managedLines.Add('"." = "write"')
+        $managedLines.Add('".git" = "read"')
+        $managedLines.Add('".agents" = "read"')
+        $managedLines.Add('".codex" = "read"')
+        $managedLines.Add('')
+        $managedLines.Add("[permissions.$($dynamicProfile.Name).network]")
+        $managedLines.Add('enabled = ' + $(if ($dynamicProfile.Network) { 'true' } else { 'false' }))
+        $managedLines.Add('')
+    }
+}
+elseif ($PermissionRouting -eq 'StrictProfile') {
     $managedLines.Add("[permissions.$($script:CssProfileName)]")
     $managedLines.Add('extends = ":workspace"')
     $managedLines.Add('')
@@ -166,11 +205,11 @@ else {
         $managedLines.Add('":tmpdir" = "deny"')
         $managedLines.Add('":slash_tmp" = "deny"')
     }
-    if ($ProtectWorkspaceSecrets) { $managedLines.Add('glob_scan_max_depth = 6') }
+    if ($effectiveProtectWorkspaceSecrets) { $managedLines.Add('glob_scan_max_depth = 6') }
     $managedLines.Add('')
     $managedLines.Add(('[permissions.{0}.filesystem.":workspace_roots"]' -f $script:CssProfileName))
     $managedLines.Add('"." = "write"')
-    if ($ProtectWorkspaceSecrets) {
+    if ($effectiveProtectWorkspaceSecrets) {
         foreach ($pattern in @('.env', '.env.*', '**/.env', '**/.env.*', '**/.npmrc', '**/.pypirc', '**/.netrc', '**/credentials.json', '**/service-account.json', '**/*.pem', '**/*.key', '**/*.pfx', '**/*.p12')) {
             $managedLines.Add((ConvertTo-CssTomlString $pattern) + ' = "deny"')
         }
@@ -218,6 +257,7 @@ $plan = [pscustomobject]@{
     Operation = $operation
     ProductVersion = $script:CssProductVersion
     StateSchema = $script:CssStateSchemaVersion
+    CodexCompatibility = $codexCompatibility
     PreviousVersion = $previousVersion
     PreviousApprovalMode = $previousApprovalMode
     PreviousNetworkMode = $previousNetworkMode
@@ -227,13 +267,13 @@ $plan = [pscustomobject]@{
     StateRoot = $resolvedState
     ApprovalMode = $ApprovalMode
     PermissionRouting = $PermissionRouting
-    ApprovalPolicy = $approvalPolicy
-    ApprovalReviewer = $approvalReviewer
+    ApprovalPolicy = $(if ($PermissionRouting -eq 'DynamicUi') { 'Selected permission profile controls this' } else { $approvalPolicy })
+    ApprovalReviewer = $(if ($PermissionRouting -eq 'DynamicUi') { 'Selected permission profile controls this' } else { $approvalReviewer })
     NetworkMode = $NetworkMode
     NetworkRoute = $(switch ($NetworkMode) { 'Off' { 'Offline; proxy disabled' } 'Allowlist' { 'Proxy-enforced domain allowlist' } 'Unrestricted' { 'Direct unrestricted network; proxy disabled' } })
     AllowedDomains = $AllowedDomain
     NetworkRisk = $(if ($NetworkMode -eq 'Unrestricted') { $unrestrictedRiskSummary } else { 'No unrestricted command-network access selected.' })
-    Filesystem = $(if ($PermissionRouting -eq 'DynamicUi') { 'legacy UI route: filesystem reads are broad; writes follow sandbox_mode and task UI overrides' } else { 'deny root; read minimal runtime; write workspace roots' })
+    Filesystem = $(if ($PermissionRouting -eq 'DynamicUi') { 'Both named Custom choices extend built-in Workspace; reads are broad and writes stay workspace-scoped' } else { 'deny root; read minimal runtime; write workspace roots' })
     DynamicUiReadScope = $(if ($PermissionRouting -eq 'DynamicUi') { $dynamicUiRiskSummary } else { 'Not applicable: StrictProfile is selected.' })
     ProtectWorkspaceSecrets = $effectiveProtectWorkspaceSecrets
     AllowTempWrite = $AllowTempWrite
@@ -241,7 +281,7 @@ $plan = [pscustomobject]@{
     MigrateLegacySettings = [bool]$MigrateLegacySettings
     RegisteredWorkspace = $recordedWorkspace
     CheckpointBridge = $(if ($resolvedWorkspace) { 'Install optional Save/List recovery bridge when PowerShell 7 is available' } else { 'Not requested' })
-    TaskPermissionOverride = $(if ($PermissionRouting -eq 'DynamicUi') { 'No default_permissions pin is installed; thread sandboxPolicy changes must apply to the next user message.' } else { 'StrictProfile keeps deny-read controls; use it when those controls matter more than pure same-task Full Access switching.' })
+    TaskPermissionOverride = $(if ($PermissionRouting -eq 'DynamicUi') { 'codex-safe-workspace, Full Access, Workspace, and Read-only must keep the last manually selected label stable before, during, and after a turn, and apply that selection to the next user message.' } else { 'StrictProfile keeps deny-read controls; use it when those controls matter more than pure same-task Full Access switching.' })
     ExternalSurfaces = 'Web Search, Browser, Computer Use, apps, plugins, MCP, and cloud tasks are not controlled.'
 }
 
@@ -252,12 +292,16 @@ if ($PlanOnly) {
     return
 }
 
+if ($codexCompatibilityError) {
+    throw $codexCompatibilityError
+}
+
 if ($PermissionRouting -eq 'DynamicUi' -and -not $AcknowledgeDynamicUiReadScope) {
     if ($NonInteractive) { throw 'DynamicUi routing requires -AcknowledgeDynamicUiReadScope.' }
     Write-Warning 'DynamicUi compatibility disclosure:'
-    Write-Output '  - The task UI can switch the same task to Full Access on the next user message without restarting Codex.'
-    Write-Output '  - The fallback uses legacy workspace semantics and cannot enforce the strict profile credential deny-read globs.'
-    Write-Output '  - Choose StrictProfile instead when deny-read protection is required.'
+    Write-Output '  - Custom remains available as codex-safe-workspace; a second offline choice prevents affected Desktop builds from substituting a fallback label during a turn.'
+    Write-Output '  - The task UI must keep the last manual selection stable before, during, and after a turn, and apply it to the next user message without restarting Codex.'
+    Write-Output '  - DynamicUi Custom profiles extend the built-in Workspace sandbox and cannot install strict root or credential deny rules.'
     $dynamicAnswer = Read-Host 'I understand the DynamicUi read-scope tradeoff. Continue? [y/N]'
     if ($dynamicAnswer -notmatch '^(?i:y|yes)$') { throw 'Installation cancelled.' }
 }
@@ -405,6 +449,7 @@ prefix_rule(
         CanaryTouched = $canaryTouched
         ApprovalMode = $ApprovalMode
         PermissionRouting = $PermissionRouting
+        DynamicUiDisplayRoute = $(if ($PermissionRouting -eq 'DynamicUi') { 'DualNamedProfiles' } else { $null })
         NetworkMode = $NetworkMode
         AllowedDomains = @($AllowedDomain | Sort-Object -Unique)
         ProtectWorkspaceSecrets = $effectiveProtectWorkspaceSecrets
@@ -439,15 +484,16 @@ catch {
 }
 
 [pscustomobject]@{
-    Status = $(if ($Upgrade) { 'UPGRADED_RESTART_REQUIRED' } else { 'INSTALLED_RESTART_REQUIRED' })
+    Status = $(if ($Upgrade) { 'UPGRADED_FRESH_TASK_REQUIRED' } else { 'INSTALLED_FRESH_TASK_REQUIRED' })
     ProductVersion = $script:CssProductVersion
     TransactionId = $transactionId
     ConfigPath = $resolvedConfig
     BackupPath = $(if ($originalConfigExists) { $configBackup } else { '<new config; rollback removes it>' })
     CheckpointBridgeInstalled = $bridgeInstalled
     RuleInstalled = $ruleInstalled
-    Verification = $(if (Get-Command codex -ErrorAction SilentlyContinue) { 'Run Test-CodexSafety.ps1 after restarting Codex.' } else { 'PARTIAL: install Codex CLI for rule verification.' })
-    RequiredPermissionSelection = $(if ($PermissionRouting -eq 'DynamicUi') { 'DynamicUi is installed without a default_permissions pin. In the same task, select Full Access and send the next user message; the effective sandboxPolicy must become dangerFullAccess. Switching back to Workspace or Read-only must likewise apply on the following message.' } else { 'StrictProfile is installed as codex-safe-workspace. It preserves deny-read controls and is intentionally not the pure dynamic Full Access route.' })
-    RequiredRestart = $(if ($env:OS -eq 'Windows_NT') { 'Start one fresh task after installing or upgrading the machine configuration. After that activation, task-level UI permission changes apply on the next user message without restarting Codex. If administrator prompts repeat, fully quit every Codex desktop window and CLI process, then relaunch once.' } else { 'Start one fresh task after the machine-configuration change. Later task-level UI permission changes apply on the next user message without restarting Codex.' })
-    RequiredElevatedSetup = $(if ($WindowsSandbox -eq 'Elevated' -and $env:OS -eq 'Windows_NT') { 'After relaunch, approve the Windows sandbox administrator setup once if prompted. Repeated prompts are not normal; run the assessment before changing sandbox mode.' } else { 'Not applicable.' })
+    Verification = $(if (Get-Command codex -ErrorAction SilentlyContinue) { 'Start one fresh task, run Test-CodexSafety.ps1, then run the real Desktop end-to-end probes.' } else { 'PARTIAL: install Codex CLI for rule verification.' })
+    RequiredPermissionSelection = $(if ($PermissionRouting -eq 'DynamicUi') { 'DynamicUi exposes codex-safe-workspace plus an offline compatibility profile. In the same task, the last manually selected Custom, Full Access, Workspace, or Read-only label must stay stable through the turn and become effective on the next user message.' } else { 'StrictProfile is installed as codex-safe-workspace. It preserves deny-read controls and is intentionally not the pure dynamic Full Access route.' })
+    RequiredActivation = $(if ($env:OS -eq 'Windows_NT') { 'Start one fresh task after installing or upgrading the machine configuration. After that activation, task-level UI permission changes apply on the next user message without restarting Codex. If administrator prompts repeat, fully quit every Codex desktop window and CLI process, then relaunch once.' } else { 'Start one fresh task after the machine-configuration change. Later task-level UI permission changes apply on the next user message without restarting Codex.' })
+    RequiredRestart = 'Not required for normal activation or later UI permission changes. Only fully relaunch Codex if Windows administrator setup prompts repeat.'
+    RequiredElevatedSetup = $(if ($WindowsSandbox -eq 'Elevated' -and $env:OS -eq 'Windows_NT') { 'In the fresh task, approve the Windows sandbox administrator setup once if prompted. Repeated prompts are not normal; fully quit every Codex desktop window and CLI process, relaunch once, then run the assessment.' } else { 'Not applicable.' })
 }

@@ -11,7 +11,7 @@ flowchart LR
     C --> D["Plan-only configuration preview"]
     D --> E["Explicit apply confirmation"]
     E --> F["Static and execpolicy verification"]
-    F --> G["Restart and runtime probes"]
+    F --> G["Fresh task and runtime probes"]
     E --> H["Recorded backup and rollback"]
 ```
 
@@ -21,9 +21,9 @@ flowchart LR
 
 ### 2. Select a routing mode
 
-Version 0.1.6 separates permission routing from approval policy:
+Version 0.2.0 separates permission routing from approval policy:
 
-- `DynamicUi` removes the plugin-owned named profile/default pin and uses `sandbox_mode` as a fallback. The Desktop can then change the same thread to Full Access, Workspace, or Read-only for the next message.
+- `DynamicUi` exposes two positive-only named profiles on Codex 0.138.0 or newer and uses built-in `:workspace` only as the startup default. It has no sticky filesystem deny entries, and the user's last deliberate click governs the next message.
 - `StrictProfile` uses `default_permissions = "codex-safe-workspace"` with root deny-read, credential deny-globs, and optional proxy allowlists. It is the stronger read boundary but is not the pure dynamic Full Access route.
 
 All three approval modes work with either route:
@@ -34,7 +34,7 @@ All three approval modes work with either route:
 
 Command networking is configured separately as offline with no proxy, proxy-enforced allowlist, or explicitly acknowledged direct unrestricted access with no proxy. DynamicUi supports Off and Unrestricted; it rejects Allowlist because a persistent proxy would keep constraining Full Access. StrictProfile supports all three modes.
 
-DynamicUi uses legacy workspace semantics. It constrains writes and command networking but allows broad filesystem reads, so it cannot enforce the StrictProfile credential deny-globs. Applying it requires an explicit read-scope acknowledgement.
+Both DynamicUi Custom profiles extend Codex's Workspace sandbox and contain no explicit filesystem deny. Reads follow that sandbox's broader scope; workspace credential files remain readable while the workspace is writable. Applying DynamicUi requires an explicit read-scope acknowledgement.
 
 ### 3. Preview and apply
 
@@ -42,7 +42,7 @@ DynamicUi uses legacy workspace semantics. It constrains writes and command netw
 
 The installer preserves unrelated TOML content, backs up each managed target, writes the selected permission route and rule, registers authorized workspace roots, installs a synthetic outside-workspace canary, and records rollback state.
 
-A machine-configuration change needs one fresh task. After that activation, DynamicUi changes are different: select Full Access, Workspace, or Read-only and send the next user message; the same task must adopt the corresponding sandbox without restarting Codex. If administrator prompts repeat on Windows, close every Codex desktop and CLI process before one clean relaunch.
+A machine-configuration change needs one fresh task. After that activation, DynamicUi changes are different: select Custom, Full Access, Workspace, or Read-only and send the next user message; the same task must adopt the corresponding policy without restarting Codex. If administrator prompts repeat on Windows, close every Codex desktop and CLI process before one clean relaunch.
 
 The Windows sandbox stores firewall setup for the active network route. `Allowlist` expects loopback proxy ports 3128 and 8081; `Off` and direct `Unrestricted` expect no proxy ports. If an older task and a newly configured task use different port sets, each can invalidate the other's global setup and cause another administrator prompt. The read-only assessment retains only matching firewall port-change records from Codex's sandbox log and reports `WindowsSandboxSetupHealth`; it never includes logged command lines. A `CONFLICT` means the latest setup does not match the selected mode. `OSCILLATION_HISTORY` means a direct reversal occurred but the latest setup is aligned, so verification passes and no action is required unless prompts recur.
 
@@ -50,13 +50,15 @@ The Windows sandbox stores firewall setup for the active network route. `Allowli
 
 `Upgrade-CodexSafety.ps1` reads the active install state and preserves its recorded selections by default. Running it without `-ConfirmUpgrade` is plan-only. A confirmed upgrade creates a unique transaction directory under `safe-setup/backups`, snapshots the previous active state under `safe-setup/state-history`, and then invokes the same deterministic installer in explicit upgrade mode.
 
-Version 0.1.5 removed the alternate Status/Commit Git backend and rewrote old workspace registries to Save/List-only recovery. Version 0.1.6 migrates schema 4 to schema 5; its default DynamicUi upgrade removes the stale named-profile pin while preserving any existing UI-selected sandbox fallback. Plugin refresh, machine configuration, install-state history, and already-running task remain separate layers.
+Version 0.1.5 removed the alternate Status/Commit Git backend and rewrote old workspace registries to Save/List-only recovery. Version 0.1.6 migrated schema 4 to schema 5. The 0.1.7-0.1.9 development cycle tested several DynamicUi representations. Version 0.2.0 migrates to schema 9, keeps the verified positive-only runtime route, and handles affected Windows label oscillation through a separate optional compatibility layer. Plugin refresh, machine configuration, Desktop compatibility state, and already-running task remain separate layers.
 
 ### 5. Verify
 
 `Test-CodexSafety.ps1` checks the generated configuration and, when a compatible CLI is available, calls `codex execpolicy check` against both allowed and deliberately broad command prefixes. Missing CLI verification produces `PARTIAL`, never a false `PASS`.
 
-Runtime checks are route-specific and use a fresh task after machine-configuration changes. The DynamicUi integration test then updates one live thread from Workspace to Full Access and back, requiring `thread/settings/updated` to report `dangerFullAccess` and `workspaceWrite` in sequence. StrictProfile verification uses `activePermissionProfile`. The codexsandboxonline/offline account name is never permission evidence.
+Runtime checks are route-specific and use a fresh task after machine-configuration changes. DynamicUi's Desktop verifier runs `codex-safe-workspace` → Full Access → built-in Workspace in one task. Runtime PASS correlates every probe with effective `turn_context`, actual unified-exec result, later `task_complete`, and an outside-workspace canary. UI PASS is separate and requires direct observation that the deliberately clicked label does not change before send, during execution, or after completion; rollout metadata cannot prove that visual condition. StrictProfile verification uses the effective managed policy. The codexsandboxonline/offline account name is never permission evidence.
+
+When only the Windows Desktop label fails, `Install-DesktopPermissionSelectorFix.ps1` verifies that the signed installed build still ships the tested selector gate and selector structure, then installs a small project-owned main-process loader, Electron session preload, and update recertifier. The launcher sets `NODE_OPTIONS` only in the child Codex process, preserving any prior value without writing a persistent environment variable. The loader hash-checks the preload and registers it on the default session before the first BrowserWindow is created; the preload uses Electron's main-world bridge before the page's first script and overrides only that selector gate. The verifier first runs the installed launcher's non-mutating validation path in real Windows PowerShell with a deliberately unusable inherited module path, traversing the same live process-routing discovery used by a real launch, then launches the same signed Electron runtime with an isolated probe page and proves both document-start ordering and non-interference with an unrelated gate. Installation waits for a live, matching startup watcher; redirect errors are persisted without ending the watcher so a subsequent Desktop launch can recover. When official client bytes change, the hash-pinned recertifier runs through the recorded PowerShell 7 path and verifies the exact package family and publisher, valid signer subject, selector structural anchors, main-process hook, and document-start behavior. Only a complete pass atomically refreshes both state records; rejection leaves the old pins intact. It never extracts or modifies the client, writes WindowsApps, or exposes a debugging port.
 
 ### 6. Roll back
 
@@ -91,6 +93,9 @@ Exact locations depend on `CODEX_HOME`, which defaults to the normal Codex user 
 | `safe-setup/backups/<transaction>/*` | Restore material isolated by install or upgrade transaction |
 | `safe-setup/state-history/*` | Immutable prior-state snapshots and rolled-back state records |
 | `safe-setup/outside-workspace-canary.txt` | Synthetic target for boundary testing |
+| `desktop-selector-loader/*` | Optional process-scoped Desktop selector main loader, session preload, launcher, and watcher; no client copy |
+| `safe-setup/desktop-selector-fix.json` | Active compatibility version pin and rollback pointer |
+| `safe-setup/desktop-selector-fix-history/*` | Recoverable prior and rolled-back compatibility generations |
 
 ## Source layout
 

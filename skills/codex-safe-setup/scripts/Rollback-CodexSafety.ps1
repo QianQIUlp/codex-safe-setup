@@ -126,4 +126,4 @@ else {
     $state | Add-Member -NotePropertyName RolledBackAtUtc -NotePropertyValue $rolledBackAt -Force
     Write-CssTextAtomic -Path $statePath -Text ($state | ConvertTo-Json -Depth 8)
 }
-Write-Output 'Rollback complete. Restart Codex so the restored configuration becomes active.'
+Write-Output 'Rollback complete. Start one fresh task so the restored machine configuration becomes active; fully restart Codex only if Windows administrator prompts repeat.'

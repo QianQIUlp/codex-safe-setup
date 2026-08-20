@@ -43,14 +43,14 @@ export const zhCN: UiContent = {
     visual: {
       agentLabel: 'Agent',
       agentName: 'Codex',
-      insideLabel: '边界内',
+      insideLabel: '受限配置边界内',
       outsideLabel: '边界外',
-      allowed: ['工作区写入', '最小运行时读取', '明确的联网策略'],
-      denied: ['凭据', '文件系统根目录', '不受限网络'],
-      deniedCrossing: '读取凭据',
+      allowed: ['工作区写入', 'workspace 沙箱读取', '明确的联网策略'],
+      denied: ['工作区外写入', 'StrictProfile 凭据', '不受限网络'],
+      deniedCrossing: '读取配置外路径',
       crossingDetail: '在边界处被拦截',
       ariaLabel:
-        '权限边界示意图：Codex Agent 位于边界内，允许工作区写入、最小运行时读取和明确的联网策略；凭据、文件系统根目录和不受限网络位于边界外并被拒绝。一次读取凭据的尝试在边界处被拦截。',
+        '受限配置示意图：DynamicUi 使用两个纯正向授权的 Workspace 命名配置；StrictProfile 另加固定的根目录和凭据拒读。',
     },
   },
   principle: {
@@ -142,7 +142,7 @@ export const zhCN: UiContent = {
         story:
           '一位使用 Full Access 的用户发现：中转站把注入的脚本伪装成"环境监测"混进了执行流程，最后因为思维链里能看到执行的代码才被发现——SSH 密钥和各种 API key 差一步就被打包带走了。',
         lesson:
-          '脚本伪装得完全无害，所以审批根本不是问题所在。工作区边界可以做到：注入的代码无论伪装得多好，都读不到项目之外的 SSH 和 API key。',
+          '脚本伪装得完全无害，所以审批根本不是问题所在。Custom 或 StrictProfile 读取边界活动时，注入代码无论伪装得多好，都读不到项目之外的 SSH 和 API key。',
       },
     },
     closer:
@@ -152,14 +152,14 @@ export const zhCN: UiContent = {
   limits: {
     eyebrow: '它限制什么',
     title: '它限制什么',
-    lead: '三道能力边界，作为一份最小权限配置一次安装。',
+    lead: '三道能力边界，并明确选择由 UI 动态控制或固定严格配置。',
     modules: [
       {
         id: 'files',
         number: 'A',
         eyebrow: '文件',
         title: 'Codex 不应默认拥有整个文件系统。',
-        lead: '安装的权限配置从工作区出发，而不是从整台机器出发。写入只允许在已登记的工作区根目录内，其余路径默认拒绝。',
+        lead: 'DynamicUi 让运行时切换不受粘连 deny 影响；StrictProfile 则固定根目录和凭据拒读。',
         inside: [
           {
             icon: 'allow',
@@ -168,23 +168,23 @@ export const zhCN: UiContent = {
           },
           {
             icon: 'allow',
-            label: '最小运行时读取',
-            detail: '仅保留运行时必需的最小读取集。',
+            label: 'Workspace 沙箱读取',
+            detail: 'DynamicUi 遵循 workspace 沙箱的读取范围；StrictProfile 用显式规则缩小读取范围。',
           },
         ],
         outside: [
           {
             icon: 'deny',
             label: '文件系统根目录',
-            detail: '默认拒绝，包括临时目录。',
+            detail: 'DynamicUi 阻止工作区外写入，StrictProfile 以显式规则固定边界；Full Access 则允许。',
           },
           {
             icon: 'deny',
             label: '常见凭据',
-            detail: '即使在工作区内也拒绝：.env、私钥、npm 与云凭据文件。',
+            detail: '只有 StrictProfile 显式拒绝。DynamicUi 不能在可写工作区内使用会粘连的 deny-glob。',
           },
         ],
-        note: 'Codex 对 .git、.codex、.agents 的保护同样保留。凭据一旦进入模型上下文或日志，即使没有执行破坏命令也等于泄露。',
+        note: 'DynamicUi 创建两个纯正向授权的运行时配置。受影响的选择器标签振荡由独立、可选的 Windows 兼容层处理，发布包不分发客户端文件。工作区内凭据文件仍可读；需要固定显式拒读时使用 StrictProfile。',
       },
       {
         id: 'network',
@@ -263,15 +263,15 @@ export const zhCN: UiContent = {
     },
     after: {
       title: '有边界的自主',
-      tagline: 'Agent 在边界内自主工作，越界操作直接失败。',
-      items: ['工作区', '必需的运行时读取', '明确的联网策略'],
+      tagline: '写入和命令出网保持边界；当前 UI 路由决定读取边界。',
+      items: ['工作区写入', '零 deny 的 Custom 配置', '明确的联网策略'],
     },
-    afterDenied: '其余一切 \u2192 拒绝',
+    afterDenied: '越界写入和命令出网 \u2192 拒绝',
     bottomLine:
       '推荐模式 BoundedAutonomy 在边界内没有审批弹窗——权限限制替代了原来靠审批维持的安全。',
     modes: {
       label: '处理边界跨越的三种方式',
-      intro: '审批方式和命令联网是两个彼此独立的决定。三种模式共用同一份最小权限文件配置——只有「谁来审批」不同。',
+      intro: '审批方式和命令联网是两个彼此独立的决定。审批者选择不会改变当前的 DynamicUi 或 StrictProfile 文件路由。',
       recommendedTag: '推荐',
       rows: [
         {
@@ -317,7 +317,7 @@ export const zhCN: UiContent = {
       },
     ],
     caveat: '静态配置和 codex execpolicy check 是证据，不是对所有未来运行时行为的证明。Codex 升级后请重新验证。',
-    restart: '安装后请重启 Codex，再进行运行时探测。',
+    restart: '机器配置变更后新建一次任务。之后同任务 UI 权限变更必须在下一条消息生效，无需重启。',
     checks: {
       label: '验证实际检查什么',
       items: [
@@ -337,14 +337,14 @@ export const zhCN: UiContent = {
     eyebrow: '安装',
     title: '安装 Codex Safe Setup',
     lead: '两条命令，一句指令——之后插件会先审计、解释取舍，只有在你确认后才写入配置。',
-    requires: '需要 Codex CLI 0.138.0 或更高版本 · Windows 上推荐 PowerShell 7',
+    requires: 'DynamicUi 与 StrictProfile 都需要 Codex CLI 0.138.0 或更高版本 · Windows 上推荐 PowerShell 7',
     commands: [
       'codex plugin marketplace add QianQIUlp/codex-safe-setup --ref main',
       'codex plugin add codex-safe-setup@codex-safe-setup',
     ],
     promptLabel: '新建一个 Codex 任务或 CLI 会话，然后输入：',
     promptText: '使用 $codex-safe-setup 审计我当前的 Codex 权限，并安装推荐的安全配置。',
-    releaseNote: 'GitHub marketplace 跟随 main，其目录固定到最新 Release；更新时刷新 marketplace 并重新安装插件包。',
+    releaseNote: '0.2.0 增加独立确认且不创建客户端副本的可选 Windows 选择器加载器。兼容的官方更新会自动重新认证，不兼容的变化会安全拒绝。GitHub marketplace 跟随 main，并固定到最新 Release。',
     shaNote: '每个 Release 都附带可安装 ZIP 和 .sha256 文件。可在 PowerShell 中用 Get-FileHash -Algorithm SHA256 <压缩包> 核对。',
     detailsCta: {
       label: '查看安装详情',
@@ -361,7 +361,7 @@ export const zhCN: UiContent = {
         '前置依赖（PowerShell 7、Codex CLI）单独征求同意。',
         '先以 Plan-only 预览确切的配置内容。',
         '只有在你明确确认后才写入。',
-        '静态与 execpolicy 验证；之后请重启 Codex。',
+        '静态与 execpolicy 检查，然后新建一次任务执行真实 Desktop 端到端探针。',
         '备份已记录——精确回滚随时可用。',
       ],
     },

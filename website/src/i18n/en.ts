@@ -43,14 +43,14 @@ export const en: UiContent = {
     visual: {
       agentLabel: 'Agent',
       agentName: 'Codex',
-      insideLabel: 'Inside the boundary',
+      insideLabel: 'Inside bounded profiles',
       outsideLabel: 'Outside the boundary',
-      allowed: ['workspace write', 'minimal runtime reads', 'explicit network policy'],
-      denied: ['credentials', 'filesystem root', 'unrestricted network'],
-      deniedCrossing: 'credential read',
+      allowed: ['workspace write', 'workspace sandbox reads', 'explicit network policy'],
+      denied: ['outside-workspace writes', 'StrictProfile credentials', 'unrestricted network'],
+      deniedCrossing: 'out-of-profile read',
       crossingDetail: 'blocked at the boundary',
       ariaLabel:
-        'A permission boundary diagram: the Codex agent is inside a boundary with workspace write, minimal runtime reads, and an explicit network policy allowed. Credentials, the filesystem root, and unrestricted network are outside and denied. A credential read attempt is blocked at the boundary.',
+        'A bounded-profile diagram: DynamicUi uses two positive-only named Workspace profiles; StrictProfile adds persistent root and credential denies.',
     },
   },
   principle: {
@@ -144,7 +144,7 @@ export const en: UiContent = {
         story:
           'A user running Full Access discovered that their relay service had injected a script into the execution flow, disguised as \u201cenvironment monitoring\u201d. They only spotted it because the executed code was visible in the chain of thought \u2014 SSH keys and API keys were one step away from being bundled out of the machine.',
         lesson:
-          'The script looked harmless, so approval was never the question. A workspace boundary is: no matter how well the injected code disguised itself, it could not have read SSH keys or API keys outside the project.',
+          'The script looked harmless, so approval was never the question. With the Custom or StrictProfile read boundary active, disguised code could not have read SSH keys or API keys outside the project.',
       },
     },
     closer:
@@ -154,14 +154,14 @@ export const en: UiContent = {
   limits: {
     eyebrow: 'What it limits',
     title: 'What it limits',
-    lead: 'Three capability boundaries, installed as one least-privilege profile.',
+    lead: 'Three capability boundaries, with an explicit choice between dynamic UI control and a pinned strict profile.',
     modules: [
       {
         id: 'files',
         number: 'A',
         eyebrow: 'Files',
         title: 'Codex shouldn\u2019t own your whole filesystem.',
-        lead: 'The installed profile extends the workspace, not the machine. Writes stay inside registered workspace roots; everything else starts denied.',
+        lead: 'DynamicUi keeps runtime switching free of sticky denies. StrictProfile pins persistent root and credential denies.',
         inside: [
           {
             icon: 'allow',
@@ -170,23 +170,23 @@ export const en: UiContent = {
           },
           {
             icon: 'allow',
-            label: 'Minimal runtime reads',
-            detail: 'The runtime-defined minimal read set, nothing more.',
+            label: 'Workspace sandbox reads',
+            detail: 'DynamicUi follows the workspace sandbox read scope; StrictProfile narrows reads with explicit rules.',
           },
         ],
         outside: [
           {
             icon: 'deny',
             label: 'Filesystem root',
-            detail: 'Denied by default, including temp directories.',
+            detail: 'Writes are blocked by DynamicUi outside the workspace and explicitly bounded by StrictProfile; Full Access permits them.',
           },
           {
             icon: 'deny',
             label: 'Common credentials',
-            detail: 'Denied even inside the workspace: .env, private keys, npm and cloud credential files.',
+            detail: 'Explicitly denied only by StrictProfile. DynamicUi cannot use sticky deny-globs inside a writable workspace.',
           },
         ],
-        note: 'Codex\u2019s own protections for .git, .codex, and .agents are preserved. A credential that enters model context or logs is an exposure even without a destructive command.',
+        note: 'DynamicUi installs two positive-only runtime profiles. A separate optional Windows compatibility layer handles affected selector-label oscillation without redistributing client files. Workspace credential files remain readable; use StrictProfile for persistent explicit denies.',
       },
       {
         id: 'network',
@@ -265,16 +265,16 @@ export const en: UiContent = {
     },
     after: {
       title: 'Bounded autonomy',
-      tagline: 'The agent works inside the boundary; out-of-bound actions fail.',
-      items: ['Workspace', 'Required runtime reads', 'Explicit network policy'],
+      tagline: 'Writes and command egress stay bounded; the selected UI route controls the read boundary.',
+      items: ['Workspace writes', 'Zero-deny Custom profile', 'Explicit network policy'],
     },
-    afterDenied: 'Everything else \u2192 denied',
+    afterDenied: 'Out-of-bound writes and command egress \u2192 denied',
     bottomLine:
       'With the recommended BoundedAutonomy mode, there are no approval prompts inside the boundary — limits do the work approvals were doing.',
     modes: {
       label: 'Three ways to handle a boundary crossing',
       intro:
-        'Approval and command networking are separate decisions. All three modes share the same least-privilege filesystem profile — only the reviewer changes.',
+        'Approval and command networking are separate decisions. The reviewer choice does not change whichever DynamicUi or StrictProfile filesystem route is active.',
       recommendedTag: 'Recommended',
       rows: [
         {
@@ -321,7 +321,7 @@ export const en: UiContent = {
       },
     ],
     caveat: 'Static configuration and codex execpolicy check are evidence, not proof of every future runtime behavior. Re-run verification after Codex upgrades.',
-    restart: 'Restart Codex after installation before runtime probes.',
+    restart: 'Start one fresh task after a machine-configuration change. Same-task UI permission changes must then apply on the next message without restarting.',
     checks: {
       label: 'What verification actually checks',
       items: [
@@ -342,7 +342,7 @@ export const en: UiContent = {
     eyebrow: 'Install',
     title: 'Install Codex Safe Setup',
     lead: 'Two commands, one prompt — then the skill audits, explains the tradeoffs, and writes configuration only after you confirm.',
-    requires: 'Requires Codex CLI 0.138.0 or newer · PowerShell 7 recommended on Windows',
+    requires: 'DynamicUi and StrictProfile require Codex CLI 0.138.0 or newer · PowerShell 7 recommended on Windows',
     commands: [
       'codex plugin marketplace add QianQIUlp/codex-safe-setup --ref main',
       'codex plugin add codex-safe-setup@codex-safe-setup',
@@ -351,7 +351,7 @@ export const en: UiContent = {
     promptText:
       'Use $codex-safe-setup to audit my current permissions and install the recommended profile.',
     releaseNote:
-      'The GitHub marketplace follows main, whose catalog pins the latest release. Refresh the marketplace and reinstall the plugin bundle to update.',
+      'Version 0.2.0 adds an optional, acknowledged Windows selector loader without creating a client copy. Compatible official updates are recertified automatically; incompatible changes fail closed. The GitHub marketplace follows main, whose catalog pins the latest release.',
     shaNote:
       'Each release also ships an install-ready ZIP with a .sha256 file. Verify the archive in PowerShell with Get-FileHash -Algorithm SHA256 <archive>.',
     detailsCta: {
@@ -369,7 +369,7 @@ export const en: UiContent = {
         'Separate consent for prerequisites (PowerShell 7, Codex CLI).',
         'Plan-only preview of the exact configuration.',
         'Applied only after your explicit confirmation.',
-        'Static and execpolicy verification; restart Codex afterwards.',
+        'Static and execpolicy checks, then a fresh task for real Desktop end-to-end probes.',
         'Backups recorded — exact rollback stays available.',
       ],
     },

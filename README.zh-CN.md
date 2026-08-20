@@ -12,7 +12,7 @@ Codex Safe Setup 是一个社区维护的 Codex 插件，用来安装最小权�
 
 ## 安装
 
-需要 Codex CLI 0.138.0 或更高版本。Windows 上推荐 PowerShell 7；插件只会在用户明确同意后安装前置依赖。
+DynamicUi 与 StrictProfile 都需要 Codex CLI 0.138.0 或更高版本。Windows 上推荐 PowerShell 7；插件只会在用户明确同意后安装前置依赖。
 
 ```powershell
 codex plugin marketplace add QianQIUlp/codex-safe-setup --ref main
@@ -42,13 +42,17 @@ codex plugin add codex-safe-setup@codex-safe-setup
 使用 $codex-safe-setup 预览并应用我现有 Codex Safe Setup 安装的升级。
 ```
 
-升级会先展示原有和目标审批方式、联网模式、Windows 沙箱和工作区选择；确认前不会写入。应用时会创建按事务隔离的备份和不可变的前一状态快照，回滚每次只退回一个配置世代。插件刷新、机器配置迁移、任务激活是三个不同阶段；配置升级后必须完整重启 Codex，并新建任务。
+升级会先展示原有和目标审批方式、联网模式、Windows 沙箱和工作区选择；确认前不会写入。应用时会创建按事务隔离的备份和不可变的前一状态快照，回滚每次只退回一个配置世代。插件刷新、机器配置迁移、任务激活是三个不同阶段；配置升级后新建一次任务。只有 Windows 管理员提示反复出现时，才把完整退出并重启作为诊断步骤。
 
 0.1.1 的 `Unrestricted` 用户必须执行 0.1.2 配置迁移：旧版通配符代理并不能让原生 SSH 等直连协议联网。迁移会关闭过滤代理并删除通配符域名表。若保留的是无限制联网和 Windows `Elevated`，仍需重新确认相应风险与一次管理员设置提示。
 
 0.1.5 恢复了原生 Git 并移除了 Status/Commit 桥接，但命名默认权限仍可能把 Desktop 任务固定在旧路由上。
 
 0.1.6 提供两条明确路线。默认 `DynamicUi` 会移除插件写入的 `default_permissions` 和命名权限固定，保留已有 UI 沙盒选择，使 Full Access、Workspace、Read-only 在同一任务的下一条用户消息生效。`StrictProfile` 保留根目录拒读、凭据文件拒读和代理白名单，适合把这些边界置于纯动态切换之前的场景。
+
+0.2.0 保留了 0.1.7–0.1.9 开发阶段已经验证的运行时规则：下一轮实际权限由最后一次手动点击决定。DynamicUi 只把内建 Workspace 作为启动默认值，并提供两个纯正向授权配置：`codex-safe-workspace` 与 `codex-safe-workspace-offline`；这些动态选项不会加入会跨选择保留的文件系统 deny。
+
+部分 Windows Desktop 构建仍可能在发送或完成期间显示另一个标签，即使实际路由正确。0.2.0 因此提供独立、可选的兼容层：它先确认本机签名 Desktop 仍包含经过验证的选择器 gate 与结构锚点，再用仅对该次 Codex 进程生效的主进程加载器，在 renderer 第一段脚本之前注册一个哈希固定的 session preload。它不提取、不修改、不复制客户端，不写 WindowsApps，不开放调试端口，也不写入用户级或机器级环境变量。官方 Desktop 更新后，启动器只有在精确包身份、有效签名者身份、选择器结构、隔离主进程探针和文档起始探针全部通过时，才会自动接受新构建并原子刷新版本与字节固定值；不兼容更新会保留上一次接受的状态并安全拒绝，无需用户为兼容更新重新安装或确认。验收会先故意提供不可用的继承模块路径，在真实 Windows PowerShell 下执行已安装启动器的无副作用校验路径（包括当前进程路由分支），成功后才接受 renderer 探针。安装还必须证明当前用户的启动监视器持续存活；一次接管失败只会被记录，不会让监视器随之退出。
 
 如果你以前是手动复制 `~/.codex/skills/secure-codex-setup`，而不是通过 marketplace 安装插件，请先把旧目录可恢复地移出技能发现路径，再添加 GitHub marketplace、安装 `codex-safe-setup` 并新建任务。不要让独立旧副本和插件副本同时被发现。
 
@@ -62,6 +66,25 @@ codex plugin add codex-safe-setup@codex-safe-setup
 ```
 
 每个 Release 都附带 `.sha256` 文件。可在 PowerShell 中运行 `Get-FileHash -Algorithm SHA256 <压缩包>` 核对下载内容。
+
+### 可选的 Windows Desktop 选择器兼容层
+
+只有在直接观察到“没有点击但标签自行变化”时才使用。先预览；正式安装会单独要求确认，因为它依赖未公开的 Desktop 功能 gate、增加一个仅当前 Codex 进程使用的 session preload，并安装当前用户的启动监视器。安装不会重启正在运行的任务：
+
+```powershell
+& <skill-dir>/scripts/Install-DesktopPermissionSelectorFix.ps1 -PlanOnly
+& <skill-dir>/scripts/Install-DesktopPermissionSelectorFix.ps1 -ConfirmApply -AcknowledgeUnsupportedDesktopOverride
+& <skill-dir>/scripts/Test-DesktopPermissionSelectorFix.ps1
+```
+
+兼容的官方客户端更新不需要重新安装或手动批准；如果选择器 gate、结构锚点、包身份、签名身份或 Electron preload 行为发生不兼容变化，启动会保持禁用，且不会覆盖上一次通过验证的固定值，直到兼容层自身更新。
+
+回滚是可恢复的，停用的加载器世代以及迁移前的旧派生副本都会保存在 `CODEX_HOME/safe-setup/desktop-selector-fix-history`：
+
+```powershell
+& <skill-dir>/scripts/Rollback-DesktopPermissionSelectorFix.ps1 -PlanOnly
+& <skill-dir>/scripts/Rollback-DesktopPermissionSelectorFix.ps1 -ConfirmRollback
+```
 
 ## 你会做出的选择
 
@@ -82,14 +105,14 @@ Windows 上还会分别询问是否安装 PowerShell 7、Codex CLI，以及是�
 
 ## 它建立的控制
 
-- 默认安装 DynamicUi，让任务 UI 对 Full Access、Workspace、Read-only 的修改在下一条消息生效，无需重启 Codex。
+- 默认安装 DynamicUi，保留 Custom / 自定义，同时让任务 UI 对 Custom、Full Access、Workspace、Read-only 的修改在下一条消息生效，无需重启 Codex。
 - 需要根目录拒读和常见凭据文件拒读时，可明确选择 StrictProfile。
 - 明确选择离线、由代理强制执行的域名白名单，或关闭代理的直连无限制联网。
 - 保留 Codex 对 `.git`、`.codex`、`.agents` 的保护。
 - 可选安装只提供 Save/List 的窄恢复检查点桥接，不替代原生 Git 的 status 或 commit。
 - 备份每个受管理文件，并生成精确回滚命令。
 
-DynamicUi 使用旧版 workspace 读取语义：它仍能限制写入和命令联网，但不能执行 StrictProfile 的凭据拒读规则。安装器会先披露并要求确认这一取舍。DynamicUi 支持 Off 和 Unrestricted；必须使用代理白名单时选择 StrictProfile。所有写入前都会备份。
+DynamicUi 的两个命名配置都继承 Codex 内建 Workspace 沙箱，并且不安装根目录或凭据 deny。`codex-safe-workspace` 使用所选命令联网策略，`codex-safe-workspace-offline` 始终关闭命令联网。读取范围因此遵循更宽的 workspace 沙箱语义；工作区可写时，工作区内的凭据文件仍可读。安装器会先披露并要求确认这一取舍。DynamicUi 支持 Off 和 Unrestricted；需要显式拒读或代理白名单固定边界时选择 StrictProfile。所有写入前都会备份。
 
 ## 它没有控制的范围
 
@@ -106,7 +129,7 @@ Web Search、Browser、Computer Use、App、Connector、其他 Plugin、MCP、�
 - `FAIL`：必要条件缺失或互相冲突。
 - `NOT CONTROLLED`：属于其他控制面。
 
-配置检查和 codex execpolicy check 只是证据，不能证明当前任务的实际权限。机器配置变更后先新建一个任务完成加载；之后在同一任务中选择 Full Access 并发送下一条消息，必须看到 `sandboxPolicy.type = dangerFullAccess`。再切回 Workspace 或 Read-only 并发送消息，下一回合必须采用对应沙盒；这些 UI 切换不需要重启 Codex。codexsandboxonline/offline 账户名不是权限证据，真正的 Full Access 直接使用原生 Git。
+配置检查、权限列表回读和 codex execpolicy check 只是证据，不能证明当前任务的实际权限。运行 `<skill-dir>/scripts/Test-DesktopPermissionE2E.ps1 -ShowPrompts`，先完成初始化轮，再在同一 Desktop 任务内依次执行 `codex-safe-workspace` → Full Access → 内建 Workspace，期间不重启。PASS 必须同时满足两类证据：直接观察每次主动点击后的标签在发送前、执行中和完成后都不变；以及 Desktop `session_meta` 未更换、真实下一轮 `turn_context`、后续 `task_complete`、逐字匹配的 unified exec 探针及退出码、工作区外 canary 全部匹配。rollout 或设置记录不能证明 UI 显示稳定，设置回显也不能单独证明实际权限。codexsandboxonline/offline 账户名不是权限证据，真正的 Full Access 直接使用原生 Git。
 
 运行时验证必须匹配模式：`Off` 要证明可达目标被阻断；`Allowlist` 要证明白名单目标经代理成功、未列出目标失败；`Unrestricted` 要用直连 TCP 或原生 OpenSSH 成功，代理横幅不能作为直连证据。
 
@@ -126,6 +149,6 @@ pwsh -NoProfile -File ./tests/Run-Tests.ps1
 pwsh -NoProfile -File ./tools/Build-Release.ps1 -Force
 ```
 
-测试只使用临时 Codex Home 和临时 Git 仓库，不会修改真实 Codex 配置。Bug 和功能建议请提交到 [Issues](https://github.com/QianQIUlp/codex-safe-setup/issues)，提交 PR 前阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。安全漏洞必须通过 [GitHub Security Advisories](https://github.com/QianQIUlp/codex-safe-setup/security/advisories/new) 私下报告，不要公开披露。
+自动测试只使用临时 Codex Home 和临时 Git 仓库，不会修改真实 Codex 配置；它只验证静态路由、权限目录和迁移，不能替代上述真实 Desktop 端到端验收。Bug 和功能建议请提交到 [Issues](https://github.com/QianQIUlp/codex-safe-setup/issues)，提交 PR 前阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。安全漏洞必须通过 [GitHub Security Advisories](https://github.com/QianQIUlp/codex-safe-setup/security/advisories/new) 私下报告，不要公开披露。
 
 本项目采用 [Apache-2.0](LICENSE) 许可证。
