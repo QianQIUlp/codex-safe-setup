@@ -39,7 +39,13 @@ For a 0.1.1-or-earlier `Unrestricted` installation, explain that the old wildcar
 
 For 0.1.4-or-earlier installations, version 0.1.5 records state schema 4 and removes the alternate normal-Git Status / Commit bridge. Upgrade rewrites any schema-2 workspace registry to the recovery-only Save/List schema and does not preserve commit authorizations.
 
-For 0.1.5 installations, version 0.1.6 records state schema 5 and fixes the Desktop routing conflict. The default DynamicUi migration removes the plugin-owned `default_permissions` pin and `[permissions.codex-safe-workspace]` table, preserves an existing UI-selected `sandbox_mode`, and otherwise installs a workspace fallback. Preview first; apply only after the DynamicUi read-scope disclosure is accepted.
+For 0.1.5 installations, version 0.1.6 records state schema 5 and introduced the legacy DynamicUi route. That migration removed the plugin-owned permission profile and restored built-in UI switching, but it also removed Custom from the menu.
+
+For 0.1.6 installations, version 0.1.7 records state schema 6 and restores the Custom menu through one permission-profile family. DynamicUi removes legacy `sandbox_mode` / `sandbox_workspace_write`, maps a deliberate legacy startup choice to the corresponding built-in `default_permissions` ID, and writes `codex-safe-workspace` with positive grants only. It requires Codex CLI 0.147.0 or newer. Never put an explicit filesystem `deny` in the DynamicUi Custom profile: Codex preserves deny entries across profile changes, which can make a later Full Access selection remain managed and restricted.
+
+For 0.1.7 installations, version 0.1.8 records state schema 7 and removes the sole named DynamicUi profile plus `default_permissions`. The old Desktop selector temporarily displayed that sole name while a running turn stopped sending permission overrides, even though the user's last deliberate click still governed the next turn. DynamicUi now always writes a distinct `Custom (config.toml)` workspace-write fallback. This is an intentional backed-up migration; use `-MigrateLegacySettings` after explaining it. StrictProfile keeps the named profile.
+
+For 0.1.8 or 0.1.9 development installations, version 0.2.0 records state schema 9. DynamicUi removes legacy sandbox and top-level approval keys, sets built-in `:workspace` only as the startup default, and installs two positive-only named profiles: `codex-safe-workspace` and `codex-safe-workspace-offline`. Runtime semantics remain last-manual-click wins. Do not claim this config shape alone fixes visible label oscillation on every Desktop build; the optional Windows compatibility layer below is a separate installation and state boundary.
 
 ### 2. Explain the choices before asking
 
@@ -47,8 +53,8 @@ Lead with: **Do not treat approval as safety. Limit what the agent can change, r
 
 Choose the permission-routing mode before approval or network settings:
 
-- `DynamicUi` (default for 0.1.6): do not write `default_permissions` or a named profile. Use the legacy `sandbox_mode` / `sandbox_workspace_write` route so Full Access, Workspace, and Read-only changes apply to the next user message without restarting Codex. Disclose that legacy workspace semantics allow broad filesystem reads and cannot enforce the StrictProfile credential deny-globs. Require `-AcknowledgeDynamicUiReadScope` before apply. DynamicUi supports `Off` and `Unrestricted`; it rejects `Allowlist` because a persistent proxy would keep constraining Full Access.
-- `StrictProfile`: retain the named root-deny, minimal-read, credential-deny, and proxy-allowlist profile. In the UI this remains the Custom / 自定义 `codex-safe-workspace` route. Use it when those boundaries matter more than pure same-task Full Access switching.
+- `DynamicUi` (default for 0.2.0): install two positive-only named profiles, `codex-safe-workspace` and `codex-safe-workspace-offline`, with top-level `default_permissions = ":workspace"`. Remove top-level `sandbox_mode`, `approval_policy`, `approvals_reviewer`, and `[sandbox_workspace_write]` so the dynamic route has one authoritative permission family and no sticky filesystem denies. Custom / 自定义, Full Access, Workspace, and Read-only must replace one another on the next user message without restarting Codex. Disclose that Custom follows the broader workspace sandbox read scope and cannot install credential deny-globs; workspace credential files remain readable while the workspace is writable. Require Codex CLI 0.138.0 or newer and `-AcknowledgeDynamicUiReadScope`. DynamicUi supports `Off` and `Unrestricted`; the offline profile always disables command network. It rejects `Allowlist` because a persistent proxy would keep constraining Full Access.
+- `StrictProfile`: write `default_permissions = "codex-safe-workspace"` so the same named root-deny, minimal-read, credential-deny, and proxy-allowlist profile is the fixed default. Use it only when that fixed boundary matters more than same-task Full Access switching.
 
 Offer these approval modes over the selected filesystem route:
 
@@ -71,7 +77,7 @@ Only after this disclosure, require an explicit acknowledgement equivalent to "I
 
 Recommend PowerShell 7 on Windows because it reduces legacy shell, encoding, quoting, and compatibility surprises. State that it is not a security boundary and cannot prevent semantic path mistakes.
 
-Recommend Codex CLI for version detection, `execpolicy` rule validation, and a complete verification result. Allow base configuration without it, but label that outcome `PARTIALLY VERIFIED`.
+Recommend Codex CLI for version detection, `execpolicy` rule validation, and a complete verification result. StrictProfile can be configured without it but remains `PARTIALLY VERIFIED`; DynamicUi must refuse apply unless a detected CLI is version 0.138.0 or newer because its config.toml Custom catalog behavior is version-specific.
 
 Never install either dependency without an explicit yes. After consent, run:
 
@@ -85,11 +91,11 @@ Use `Skip` for each declined dependency. Do not silently install Node.js when np
 
 Choose Windows `Elevated` when the user accepts its administrator-approved setup; otherwise use `Unelevated` or `Keep` and explain the weaker boundary.
 
-Run `Install-CodexSafety.ps1` with `-PlanOnly`. For StrictProfile, include `-MigrateLegacySettings` only after explaining that legacy sandbox keys will be replaced after backup. For DynamicUi, use the flag only when removing a user-owned non-plugin `default_permissions` value after explicit review.
+Run `Install-CodexSafety.ps1` with `-PlanOnly`. For StrictProfile, include `-MigrateLegacySettings` only after explaining that legacy sandbox keys will be replaced after backup. For DynamicUi, use it when replacing an older generic Custom or single-profile shape after explicit review; the resulting dual named-profile route is the intended DynamicUi representation.
 
 Show the configuration path, managed keys, chosen boundaries, checkpoint registration, backup location, rollback command, and controls that remain outside this skill.
 
-DynamicUi must remove the plugin-owned named profile and must not write `default_permissions`; `sandbox_mode` is only the persisted fallback and the task UI owns subsequent-turn routing. StrictProfile writes `default_permissions = "codex-safe-workspace"` and the named profile. Do not create or modify managed `allowed_permission_profiles` restrictions.
+DynamicUi must write built-in `default_permissions = ":workspace"`, both plugin-owned positive-only named profiles, and no legacy sandbox or top-level approval keys. StrictProfile writes `default_permissions = "codex-safe-workspace"` with explicit root and credential denies and removes the DynamicUi compatibility profile. Never mix the two configuration families. Do not create or modify managed `allowed_permission_profiles` restrictions.
 
 For a linked Git worktree, keep the parent repository's shared .git protected in the safe default. If the user temporarily selects Full Access for a task, use native Git normally in that task; Full Access must remove the sandbox restriction rather than route Git through a separate backend. Never add a parent-.git write exception or a commit bridge to compensate for a UI/runtime mismatch.
 
@@ -128,15 +134,17 @@ After approval, rerun with `-ConfirmApply -NonInteractive`. DynamicUi also requi
   -NonInteractive
 ```
 
-Never install danger-full-access as the configured fallback. In DynamicUi, a deliberate Full Access selection must produce `sandboxPolicy.type = dangerFullAccess` for the next user message and subsequent turns in the same task.
+Never treat the config fallback or a rollout echo as evidence of what the user last deliberately clicked. In DynamicUi, selecting Full Access must produce `sandbox_policy.type = danger-full-access`, `permission_profile.type = disabled`, and a successful outside-workspace canary on the next user message.
 
 ### 6. Verify, activate, and report honestly
 
 Run `Test-CodexSafety.ps1`. Treat static configuration and `execpolicy` checks as evidence, not runtime proof. Mark unavailable CLI rule checks as `PARTIAL`, not `PASS`.
 
-After a successful DynamicUi apply, start one fresh task to load the machine-configuration change. Then prove both directions in that same task: select Full Access, send a new message, and require `sandboxPolicy.type = dangerFullAccess`; select Workspace or Read-only, send another message, and require the corresponding sandbox on the following turn. Those later UI changes must take effect on the next user message without restarting Codex.
+After a successful DynamicUi apply, start one fresh task to load the machine-configuration change. Use `<skill-dir>/scripts/Test-DesktopPermissionE2E.ps1 -ShowPrompts`, complete its setup turn, then run all three probes in that same task in order: `codex-safe-workspace`, Full Access, built-in Workspace. For each probe, directly observe that the deliberately clicked label is identical before sending, while the turn runs, and after it finishes. The verifier must require that explicit visual confirmation plus a real Codex Desktop `session_meta` with no replacement during the probe window, and correlate each exact generated command with its preceding `turn_context`, later `task_complete`, exit status, and outside-workspace canary. Those UI changes must take effect on the next user message without restarting Codex.
 
-Verify the effective runtime, not only the visible selector. For DynamicUi, prefer `sandboxPolicy.type`; for StrictProfile, prefer `activePermissionProfile.id`. The codexsandboxonline / codexsandboxoffline username is not proof of permission scope. If the UI says Full Access but runtime metadata does not report dangerFullAccess, report FAIL: UI/runtime permission mismatch; do not invent a Git backend. In a verified Full Access task, native Git must be able to update ordinary repository metadata, including a linked worktree's shared .git, subject only to normal OS ACLs.
+Verify visual state and effective runtime as separate conditions. Rollout records cannot prove what the selector displayed, while the selector cannot prove runtime scope. Full Access requires effective `danger-full-access`, a disabled permission profile, and active `:danger-full-access`. Custom requires active `codex-safe-workspace`, managed workspace-write, a failed outside-workspace canary, and zero explicit deny entries. Built-in Workspace requires active `:workspace` with no stale deny entries. The codexsandboxonline / codexsandboxoffline username is not proof of permission scope. On any mismatch, report FAIL and do not invent a Git backend. In verified Full Access, native Git must be able to update ordinary repository metadata, including a linked worktree's shared .git, subject only to normal OS ACLs.
+
+If runtime routing passes but direct observation still shows a Windows Desktop label change without a click, treat it as a separate Desktop compatibility problem. Do not rewrite DynamicUi repeatedly. Preview `Install-DesktopPermissionSelectorFix.ps1 -PlanOnly`. Explain that the optional layer relies on an undocumented selector gate, launches the original signed executable with a process-scoped main loader and hash-pinned Electron session preload, and adds a per-user startup watcher. It creates no client copy, opens no debugging port, writes no persistent environment variable, and must never modify WindowsApps or package any OpenAI executable, ASAR, renderer bundle, or other client file. Apply only after both `-ConfirmApply` and `-AcknowledgeUnsupportedDesktopOverride`; record the currently running Desktop root as a migration grace process and never close or restart that task during installation. Installation must wait until the matching watcher is demonstrably alive, and a redirect failure must be recorded without terminating it. Run `Test-DesktopPermissionSelectorFix.ps1` afterward: it must first execute the installed launcher's non-mutating validation path, including live process-routing discovery, under real Windows PowerShell; then prove watcher liveness, the Electron main hook, document-start ordering, target-gate override, unrelated-gate preservation, and absence of a derived app tree. A renderer-only probe is insufficient if the actual launcher was disabled. The launcher must pin the exact official package identity, source bytes, signer identity, selector structure, and loader assets. On a changed official build it must run isolated main-process and document-start probes and atomically refresh both state records only when every check passes; compatible updates need no reinstall, while incompatible updates preserve the prior pins and fail closed.
 
 A machine-configuration install or upgrade still needs one fresh task because the already-running environment does not reload the file. That is separate from routine DynamicUi changes: after activation, Full Access, Workspace, and Read-only changes must apply on the next message in the same task without a Codex restart. If administrator prompts repeat on Windows, require the user to fully quit every Codex desktop window and CLI process before one clean relaunch.
 
@@ -147,6 +155,8 @@ Report `PASS`, `PARTIAL`, `FAIL`, or `NOT CONTROLLED` for writes outside workspa
 ### 7. Roll back on request
 
 Run `Rollback-CodexSafety.ps1` without confirmation first so it shows the target backup. Obtain confirmation immediately before restoring or removing configuration.
+
+The Desktop selector compatibility layer has separate schema-3 state and rollback. Preview `Rollback-DesktopPermissionSelectorFix.ps1 -PlanOnly`, then require `-ConfirmRollback`. Its rollback must remove only shortcuts still pointing at the recorded loader, preserve the deactivated generation under `CODEX_HOME/safe-setup/desktop-selector-fix-history`, and restore the immediately previous loader or preserved legacy generation when present.
 
 ## Checkpoint rule
 

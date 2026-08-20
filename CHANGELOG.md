@@ -2,6 +2,17 @@
 
 All notable changes are documented here. Releases follow semantic versioning.
 
+## 0.2.0 - 2026-08-20
+
+- Preserve the verified runtime rule that the last deliberate selector click governs the next turn. DynamicUi uses built-in Workspace as its startup default plus two positive-only named profiles, with no sticky filesystem deny entries.
+- Add a real Desktop end-to-end verifier that separates runtime evidence from direct before/during/after observation of the selector label.
+- Add an optional, explicitly acknowledged Windows Desktop compatibility layer for affected builds whose selector label changes without a click. It launches the original signed executable with a process-scoped main loader and a hash-pinned Electron session preload that runs before the first renderer script; it creates no derived client copy and opens no debugging port.
+- Pin the compatibility layer to the exact package version, executable, ASAR, signer, and shipped selector gate. Add isolated main-process and document-start probes, startup redirection that preserves the task running during migration, tamper detection, generation history, and recoverable rollback. Release archives contain no OpenAI executable, ASAR, renderer bundle, or other client file.
+- Validate the installed launch chain under real Windows PowerShell and use module-independent SHA-256 hashing, preventing a missing `Get-FileHash` command from disabling startup redirection while renderer-only probes still pass.
+- Validate the live process-routing branch as part of that hidden launch check, normalize scalar Windows PowerShell query results, require a live startup watcher before installation can pass, and keep the watcher running after a failed redirect attempt so a later launch can recover.
+- Automatically recertify compatible official Desktop updates by requiring the same package family and publisher, a valid pinned signer identity, tested selector structural anchors, and fresh isolated main-process and document-start probes. Refresh schema-3 version and byte pins atomically only after every check passes; preserve the prior accepted state and fail closed for incompatible updates.
+- Preserve StrictProfile for fixed deny-read boundaries, record the main configuration as state schema 9, and retain migrations from the unreleased 0.1.7-0.1.9 development states.
+
 ## 0.1.6 - 2026-08-19
 
 - Add `DynamicUi` routing, which removes the plugin-owned named-profile/default pin and uses the Desktop-compatible sandbox route so Full Access, Workspace, and Read-only changes apply on the next user message in the same task.

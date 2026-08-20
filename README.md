@@ -16,7 +16,7 @@ This project is not an absolute-safety guarantee and is not an official OpenAI p
 
 ## Install
 
-Requires Codex CLI 0.138.0 or newer. The plugin recommends PowerShell 7 on Windows and can install prerequisites only after explicit consent.
+Both DynamicUi and StrictProfile require Codex CLI 0.138.0 or newer. The plugin recommends PowerShell 7 on Windows and can install prerequisites only after explicit consent.
 
 ```powershell
 codex plugin marketplace add QianQIUlp/codex-safe-setup --ref main
@@ -46,13 +46,17 @@ Do not uninstall first: uninstalling is unnecessary and does not migrate the mac
 Use $codex-safe-setup to preview and apply the upgrade for my existing Codex Safe Setup installation.
 ```
 
-The upgrade first shows the prior and requested approval, network, Windows sandbox, and workspace selections. It writes nothing until confirmed. On apply, it creates a transaction-scoped backup plus an immutable previous-state snapshot; rollback restores one configuration generation at a time. Plugin refresh, machine-configuration migration, and task activation are separate: after the configuration upgrade, fully restart Codex and use a fresh task.
+The upgrade first shows the prior and requested approval, network, Windows sandbox, and workspace selections. It writes nothing until confirmed. On apply, it creates a transaction-scoped backup plus an immutable previous-state snapshot; rollback restores one configuration generation at a time. Plugin refresh, machine-configuration migration, and task activation are separate: after the configuration upgrade, start one fresh task. A full process restart is diagnostic only when Windows administrator prompts repeat.
 
 Version 0.1.2 requires this configuration migration for 0.1.1 `Unrestricted` users because the old wildcard proxy representation did not provide native direct networking. The migration disables the filtering proxy and removes the wildcard domain table. The same unrestricted-network risk acknowledgement and Windows administrator-setup acknowledgement remain required when those preserved choices apply.
 
 Version 0.1.5 restored native Git and removed the alternate Status/Commit bridge, but its named default profile could still pin Desktop tasks.
 
 Version 0.1.6 adds two explicit routes. `DynamicUi` is the default: it removes the plugin-owned `default_permissions` and named-profile pin, preserves an existing UI sandbox choice, and makes Full Access, Workspace, and Read-only changes effective on the next user message in the same task. `StrictProfile` retains root deny-read, credential deny-globs, and proxy allowlists when those controls matter more than pure same-task switching.
+
+Version 0.2.0 preserves the runtime rule verified during the 0.1.7-0.1.9 development cycle: the last option deliberately clicked governs the next turn. DynamicUi uses built-in Workspace as the startup default and exposes two positive-only named choices, `codex-safe-workspace` and `codex-safe-workspace-offline`; it never adds a sticky filesystem deny to these dynamic choices.
+
+Some Windows Desktop builds can still render a different selector label while a turn is sent or completed even though runtime routing is correct. Version 0.2.0 therefore includes a separate, optional compatibility layer. It verifies that the installed signed Desktop still contains the tested selector gate and selector structure, then launches that original executable with a process-scoped main loader that registers one hash-pinned session preload before the first renderer script. It does not extract, patch, or copy the client, modify WindowsApps, open a debugging port, or persist a user/machine environment variable. After an official Desktop update, the launcher automatically accepts the new build only when the exact package identity, valid signer identity, selector structure, isolated main-process probe, and document-start probe all pass; it then atomically refreshes the version and byte pins. An incompatible update fails closed without replacing the last accepted state. Its verifier runs the installed non-mutating launch-validation path—including live process-routing discovery—under real Windows PowerShell with an intentionally unusable inherited module path before accepting the renderer probes. Installation also requires the per-user watcher to remain alive; a failed redirect is recorded without terminating that watcher.
 
 If you manually copied the old standalone `~/.codex/skills/secure-codex-setup` folder instead of installing the marketplace plugin, move that folder to a recoverable backup outside skill discovery, add the GitHub marketplace, install `codex-safe-setup`, and start a new task. Keeping the standalone copy discoverable would expose two independently versioned skills.
 
@@ -66,6 +70,25 @@ codex plugin add codex-safe-setup@codex-safe-setup
 ```
 
 Each release includes a `.sha256` file. Verify the downloaded archive on PowerShell with `Get-FileHash -Algorithm SHA256 <archive>`.
+
+### Optional Windows Desktop selector compatibility
+
+Use this only when direct observation shows the label changing without a click. Preview first; installation requires separate acknowledgement because it relies on an undocumented Desktop feature gate, adds a process-scoped session preload, and installs a per-user startup watcher. The task running during installation is never restarted:
+
+```powershell
+& <skill-dir>/scripts/Install-DesktopPermissionSelectorFix.ps1 -PlanOnly
+& <skill-dir>/scripts/Install-DesktopPermissionSelectorFix.ps1 -ConfirmApply -AcknowledgeUnsupportedDesktopOverride
+& <skill-dir>/scripts/Test-DesktopPermissionSelectorFix.ps1
+```
+
+Compatible official client updates require no reinstall or manual re-approval. If the selector gate, structural anchors, package identity, signing identity, or Electron preload behavior changes incompatibly, launch remains disabled and the prior accepted pins remain intact until the compatibility layer itself is updated.
+
+Rollback is recoverable and preserves deactivated loader generations—and any migrated legacy derived copy—under `CODEX_HOME/safe-setup/desktop-selector-fix-history`:
+
+```powershell
+& <skill-dir>/scripts/Rollback-DesktopPermissionSelectorFix.ps1 -PlanOnly
+& <skill-dir>/scripts/Rollback-DesktopPermissionSelectorFix.ps1 -ConfirmRollback
+```
 
 ## What the setup asks you to choose
 
@@ -86,14 +109,14 @@ On Windows, the setup separately asks whether to install PowerShell 7 and Codex 
 
 ## What it changes
 
-- Installs DynamicUi routing by default so the task UI can change Full Access, Workspace, or Read-only for the next message without restarting Codex.
+- Installs DynamicUi routing by default so Custom stays visible and the task UI can change Custom, Full Access, Workspace, or Read-only for the next message without restarting Codex.
 - Offers StrictProfile when filesystem root deny-read and common credential-file deny-globs are required.
 - Explicitly selects offline, proxy-enforced allowlist, or direct unrestricted command networking.
 - Preserves Codex protections for `.git`, `.codex`, and `.agents`.
 - Optionally installs a narrow, pinned Save/List recovery bridge that never acts as an alternate status or commit backend.
 - Backs up every managed file and provides an exact rollback command.
 
-DynamicUi uses legacy workspace semantics: it can constrain writes and command networking, but it cannot enforce StrictProfile's credential deny-read globs. The installer discloses that tradeoff and requires acknowledgement. DynamicUi supports Off and Unrestricted; choose StrictProfile when a proxy-enforced Allowlist is mandatory. Every apply is backed up, and existing installations use the dedicated upgrade path.
+DynamicUi's two named choices extend the built-in Workspace sandbox and intentionally install no root or credential deny entries. `codex-safe-workspace` uses the selected command-network setting; `codex-safe-workspace-offline` always keeps command networking off. Reads therefore follow Codex's broader workspace sandbox scope, and credential files inside a writable workspace remain readable. The installer discloses this tradeoff and requires acknowledgement. DynamicUi supports Off and Unrestricted; choose StrictProfile when explicit deny-read rules or a proxy-enforced Allowlist must remain fixed. Every apply is backed up, and existing installations use the dedicated upgrade path.
 
 ## What it does not control
 
@@ -110,7 +133,7 @@ The skill reports each control as:
 - `FAIL`: a required condition is missing or contradictory.
 - `NOT CONTROLLED`: the capability belongs to another control surface.
 
-Static configuration and codex execpolicy checks are evidence, not proof of the active task. After one fresh task loads a DynamicUi machine-configuration change, select Full Access and send the next user message: the same task must report `sandboxPolicy.type = dangerFullAccess`. Switch back to Workspace or Read-only and send another message; that following turn must report the matching sandbox. These UI changes require no Codex restart. The codexsandboxonline/offline username is not permission evidence, and verified Full Access uses native Git normally.
+Static configuration, profile-list results, and codex execpolicy checks are evidence, not proof of the active task. Run `<skill-dir>/scripts/Test-DesktopPermissionE2E.ps1 -ShowPrompts`, complete its setup turn, then execute `codex-safe-workspace` → Full Access → built-in Workspace in one Desktop task without restarting. PASS requires direct observation that each deliberately clicked label stays unchanged before send, during execution, and after completion, plus a Desktop `session_meta` with no replacement during the probe window, real next-turn `turn_context`, a later `task_complete`, the exact unified-exec probe and exit status, and an outside-workspace canary. Rollout/settings records cannot prove the visual condition, and a settings echo alone is never proof of runtime scope. The codexsandboxonline/offline username is not permission evidence, and verified Full Access uses native Git normally.
 
 Runtime verification is mode-specific: `Off` must block a known-reachable endpoint; `Allowlist` must allow one configured domain through the proxy and block one unlisted domain; `Unrestricted` must pass a direct TCP or native OpenSSH probe. A successful SOCKS/HTTP proxy probe is not proof of direct unrestricted networking.
 
@@ -130,7 +153,7 @@ pwsh -NoProfile -File ./tests/Run-Tests.ps1
 pwsh -NoProfile -File ./tools/Build-Release.ps1 -Force
 ```
 
-Tests use temporary Codex homes and Git repositories. They do not change the real Codex configuration. The suite covers configuration migration and preservation, UI/runtime permission-contract assertions, injection guards, least-privilege generation, execpolicy validation, branch/index-neutral recovery checkpoints, sensitive-file refusals, pinned Git, authorized repositories, versioned install-state upgrades, target-locked rollback chains, and exact restoration.
+Tests use temporary Codex homes and Git repositories. They do not change the real Codex configuration. The automated suite covers configuration migration and preservation, static routing and permission-catalog assertions, injection guards, least-privilege generation, execpolicy validation, branch/index-neutral recovery checkpoints, sensitive-file refusals, pinned Git, authorized repositories, versioned install-state upgrades, target-locked rollback chains, and exact restoration. It does not replace the separate real Desktop end-to-end verifier above.
 
 ## Community
 

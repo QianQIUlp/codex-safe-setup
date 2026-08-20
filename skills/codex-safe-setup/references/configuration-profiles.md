@@ -14,10 +14,10 @@ Auto-review is a reviewer substitution. It does not alter filesystem, network, p
 
 | Installer value | Persisted configuration | Same-task UI switching | Read boundary |
 |---|---|---|---|
-| `DynamicUi` | `sandbox_mode` plus `sandbox_workspace_write`; no `default_permissions` or plugin-owned named profile | Full Access, Workspace, and Read-only apply to the next user message | Legacy workspace semantics: broad reads, workspace-scoped writes |
+| `DynamicUi` | Built-in `:workspace` startup default plus two positive-only named profiles | `codex-safe-workspace`, Full Access, Workspace, and Read-only apply to the next user message | Custom follows the workspace sandbox's broader read scope |
 | `StrictProfile` | `default_permissions = "codex-safe-workspace"` and the named profile | Not the pure dynamic route | Root deny-read, minimal runtime reads, credential deny-globs |
 
-DynamicUi is the 0.1.6 default and requires `-AcknowledgeDynamicUiReadScope`. After one fresh task loads a machine-configuration change, `thread/settings/updated` must report `sandboxPolicy.type = dangerFullAccess` after Full Access is selected, then `workspaceWrite` or `readOnly` after switching back. Do not infer permission scope from codexsandboxonline or codexsandboxoffline.
+DynamicUi is the 0.2.0 default, requires Codex 0.138.0 or newer, and requires `-AcknowledgeDynamicUiReadScope`. It exposes `codex-safe-workspace` and a real offline choice, `codex-safe-workspace-offline`, without sticky filesystem denies. Generate the real Desktop probes with `<skill-dir>/scripts/Test-DesktopPermissionE2E.ps1 -ShowPrompts`. Complete the setup turn, then run `codex-safe-workspace` → Full Access → built-in Workspace in one task. Directly observe the selected label before send, during execution, and after completion; metadata cannot prove visual stability. Runtime PASS separately requires Codex Desktop `session_meta` with no replacement during the probes, the matching `turn_context`, exact unified-exec command and result, later `task_complete`, and outside-workspace canary. Do not infer permission scope from codexsandboxonline or codexsandboxoffline. If runtime passes while only the label oscillates on Windows, use the separately acknowledged and version-pinned Desktop compatibility layer; do not keep changing the runtime profile.
 
 ## Command-network modes
 
@@ -31,8 +31,8 @@ A domain table without an active proxy is not an enforced allowlist.
 
 The installer writes network switches for the selected route:
 
-- DynamicUi `Off`: `sandbox_workspace_write.network_access = false` and proxy disabled.
-- DynamicUi `Unrestricted`: network enabled and proxy disabled.
+- DynamicUi `Off`: Custom network disabled and proxy disabled.
+- DynamicUi `Unrestricted`: Custom network enabled and proxy disabled.
 - StrictProfile `Off`, `Allowlist`, and `Unrestricted`: use the named profile plus the matching proxy state.
 
 DynamicUi rejects Allowlist because the persistent proxy would contradict pure Full Access.
@@ -53,8 +53,8 @@ This matches OpenAI's documented internet-access risks and its recommendation to
 
 ## Filesystem policy
 
-StrictProfile extends `:workspace`, denies `:root`, permits `:minimal` reads and workspace-root writes, and denies common credential-file globs. DynamicUi deliberately uses the older workspace sandbox so the Desktop can replace the sandbox for subsequent turns; it cannot claim StrictProfile's deny-read protection.
+StrictProfile's `codex-safe-workspace` extends `:workspace`, denies `:root`, permits `:minimal` reads and workspace-root writes, and can deny common credential-file globs. DynamicUi also uses that visible name but installs only positive grants; its second offline profile differs by keeping command network disabled.
 
-Permission profiles are Beta. Version 0.1.6 keeps the two routes mutually exclusive and backs up the original file before migration.
+Permission profiles are Beta. Version 0.2.0 uses them for both routes. DynamicUi requires exactly the two plugin-owned positive-only profiles with built-in `default_permissions = ":workspace"`; legacy sandbox keys are a conflict. Every migration backs up the original file. The optional Desktop selector layer has its own plan, acknowledgement, schema-3 state, verifier, compatible-official-update recertification, and rollback; it is not part of config.toml.
 
-Base installation can proceed without Codex CLI, but exact version and rule behavior remain partially verified. A complete result requires a compatible CLI and successful `codex execpolicy check`.
+StrictProfile installation can proceed without Codex CLI, but exact version and rule behavior remain partially verified. DynamicUi apply requires detected Codex CLI 0.138.0 or newer. A complete result also requires successful `codex execpolicy check` and the Desktop end-to-end probe.

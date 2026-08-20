@@ -80,6 +80,53 @@ unified_exec = true
 "@
     [IO.File]::WriteAllText($configPath, $originalConfig, [Text.UTF8Encoding]::new($false))
 
+    $conflictingPermissionConfigs = @(
+        [pscustomobject]@{
+            Name = 'legacy-full-named-safe'
+            Text = @(
+                'default_permissions = "codex-safe-workspace"'
+                'sandbox_mode = "danger-full-access"'
+                ''
+                '[permissions.codex-safe-workspace]'
+                'extends = ":workspace"'
+                ''
+                '[sandbox_workspace_write]'
+                'network_access = true'
+            ) -join [Environment]::NewLine
+        }
+        [pscustomobject]@{
+            Name = 'legacy-workspace-named-full'
+            Text = @(
+                'default_permissions = ":danger-full-access"'
+                'sandbox_mode = "workspace-write"'
+                ''
+                '[sandbox_workspace_write]'
+                'network_access = false'
+            ) -join [Environment]::NewLine
+        }
+    )
+    foreach ($conflictCase in $conflictingPermissionConfigs) {
+        $permissionConflictHome = Join-Path $temporaryRoot $conflictCase.Name
+        $permissionConflictConfig = Join-Path $permissionConflictHome 'config.toml'
+        New-Item -ItemType Directory -Path $permissionConflictHome -Force | Out-Null
+        [IO.File]::WriteAllText($permissionConflictConfig, $conflictCase.Text, [Text.UTF8Encoding]::new($false))
+
+        $conflictAssessment = (& $assessScript -CodexHome $permissionConflictHome -ConfigPath $permissionConflictConfig -AsJson) | ConvertFrom-Json
+        Assert-True $conflictAssessment.PermissionConfigurationConflict "$($conflictCase.Name): assessment must detect the mixed configuration."
+        Assert-True ($conflictAssessment.PermissionRouting -eq 'Conflict') "$($conflictCase.Name): routing must be Conflict."
+        Assert-True $conflictAssessment.FullAccessRequested "$($conflictCase.Name): a danger-full-access value must be recorded only as requested."
+        Assert-True (-not $conflictAssessment.FullAccessDetected) "$($conflictCase.Name): mixed configuration must not be reported as effective Full Access."
+        Assert-True (-not $conflictAssessment.ConfiguredDefaultFullAccess) "$($conflictCase.Name): mixed configuration must not be reported as an authoritative Full Access default."
+
+        $verifierOutput = @(& pwsh -NoProfile -NonInteractive -File $testScript -CodexHome $permissionConflictHome -ConfigPath $permissionConflictConfig -StateRoot (Join-Path $permissionConflictHome 'safe-setup') -SkipCliRuleCheck -AsJson 2>&1)
+        $verifierExitCode = $LASTEXITCODE
+        Assert-True ($verifierExitCode -ne 0) "$($conflictCase.Name): verifier must fail the mixed configuration."
+        $conflictVerification = ($verifierOutput -join [Environment]::NewLine) | ConvertFrom-Json
+        Assert-True ($conflictVerification.Overall -eq 'FAILED') "$($conflictCase.Name): verifier overall result must be FAILED."
+        $precedenceCheck = @($conflictVerification.Checks | Where-Object Control -eq 'Configuration precedence')
+        Assert-True ($precedenceCheck.Count -eq 1 -and $precedenceCheck[0].Status -eq 'FAIL' -and $precedenceCheck[0].Evidence -match 'CONFLICT') "$($conflictCase.Name): precedence failure must explicitly identify the conflict."
+    }
+
     $legacyRefused = $false
     try { & $installScript -PermissionRouting StrictProfile -ApprovalMode AskMe -NetworkMode Off -WindowsSandbox Keep -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -PlanOnly | Out-Null } catch { $legacyRefused = $true }
     Assert-True $legacyRefused 'Installer must refuse conflicting legacy settings without explicit migration consent.'
@@ -154,7 +201,7 @@ unified_exec = true
     Assert-True ($directNetworkCheck.Count -eq 1 -and $directNetworkCheck[0].Status -eq 'PASS') 'Verifier must accept direct unrestricted networking only when the proxy and domain table are absent.'
     $directState = Get-Content -LiteralPath (Join-Path $directHome 'safe-setup\install-state.json') -Raw | ConvertFrom-Json
     Assert-True (@($directState.AllowedDomains).Count -eq 0) 'Unrestricted install state must not retain domain allow rules.'
-    Assert-True ($directState.schemaVersion -eq 5 -and $directState.productVersion -eq '0.1.6') 'New installs must record the current state schema and product version.'
+    Assert-True ($directState.schemaVersion -eq 9 -and $directState.productVersion -eq '0.2.0') 'New installs must record the current state schema and product version.'
 
     $upgradeHome = Join-Path $temporaryRoot 'upgrade-home'
     $upgradeStateRoot = Join-Path $upgradeHome 'safe-setup'
@@ -191,7 +238,7 @@ unified_exec = true
     Assert-True ($upgradedConfig -match '(?m)^network_proxy = false\r?$') 'Upgrade must disable the old wildcard filtering proxy for direct unrestricted networking.'
     Assert-True ($upgradedConfig -notmatch '(?m)^\s*"\*"\s*=\s*"allow"') 'Upgrade must remove the old wildcard domain rule.'
     $upgradedState = Get-Content -LiteralPath $legacyStatePath -Raw | ConvertFrom-Json
-    Assert-True ($upgradedState.schemaVersion -eq 5 -and $upgradedState.productVersion -eq '0.1.6' -and $upgradedState.operation -eq 'Upgrade') 'Upgrade must write schema-versioned state.'
+    Assert-True ($upgradedState.schemaVersion -eq 9 -and $upgradedState.productVersion -eq '0.2.0' -and $upgradedState.operation -eq 'Upgrade') 'Upgrade must write schema-versioned state.'
     Assert-True ($upgradedState.previousStateSnapshot -and (Test-Path -LiteralPath $upgradedState.previousStateSnapshot -PathType Leaf)) 'Upgrade must retain an immutable previous-state snapshot.'
     Assert-True ([IO.Path]::GetFullPath($upgradedState.ConfigBackup).StartsWith([IO.Path]::GetFullPath((Join-Path $upgradeStateRoot 'backups')), [StringComparison]::OrdinalIgnoreCase)) 'Upgrade backup must stay under the transaction backup root.'
 
@@ -217,13 +264,15 @@ unified_exec = true
     $installResult = @(& $installScript -PermissionRouting StrictProfile -ApprovalMode AskMe -NetworkMode Allowlist -AllowedDomain 'example.com' -WindowsSandbox Keep -WorkspacePath $repository -CodexHome $codexHome -ConfigPath $configPath -StateRoot $stateRoot -MigrateLegacySettings -ConfirmApply -NonInteractive)
     $installSummary = @($installResult | Where-Object { $_.PSObject.Properties['Status'] } | Select-Object -Last 1)
     Assert-True ($installSummary.Count -eq 1) 'Installer must return a structured completion summary.'
+    Assert-True ($installSummary[0].Status -eq 'INSTALLED_FRESH_TASK_REQUIRED') 'Installer status must require a fresh task, not a Codex restart.'
     Assert-True ($installSummary[0].RequiredPermissionSelection -match 'StrictProfile') 'Completion summary must identify the strict routing mode.'
     Assert-True ($installSummary[0].RequiredPermissionSelection -match 'codex-safe-workspace') 'Completion summary must name the strict custom profile.'
     Assert-True ($installSummary[0].RequiredPermissionSelection -match 'deny-read controls') 'Completion summary must distinguish strict protection from DynamicUi.'
     Assert-True (-not $installSummary[0].PSObject.Properties['GitCommitBridgeEnabled']) 'Installer must not expose an alternate normal-commit backend.'
     if ($env:OS -eq 'Windows_NT') {
-        Assert-True ($installSummary[0].RequiredRestart -match 'Start one fresh task') 'Windows activation must require one fresh task after a machine-configuration change.'
-        Assert-True ($installSummary[0].RequiredRestart -match 'fully quit every Codex desktop window and CLI process') 'Repeated prompts must escalate to a complete process shutdown.'
+        Assert-True ($installSummary[0].RequiredActivation -match 'Start one fresh task') 'Windows activation must require one fresh task after a machine-configuration change.'
+        Assert-True ($installSummary[0].RequiredActivation -match 'fully quit every Codex desktop window and CLI process') 'Repeated prompts must escalate to a complete process shutdown.'
+        Assert-True ($installSummary[0].RequiredRestart -match '^Not required') 'Normal activation must explicitly state that a Codex restart is not required.'
     }
 
     $installedConfig = [IO.File]::ReadAllText($configPath)
@@ -329,12 +378,14 @@ unified_exec = true
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $stateRoot 'outside-workspace-canary.txt'))) 'Rollback must remove a newly created synthetic canary.'
 
     & (Join-Path $PSScriptRoot 'Test-DynamicPermissionRouting.ps1')
+    & (Join-Path $PSScriptRoot 'Test-DesktopPermissionE2EVerifier.Unit.ps1')
+    & (Join-Path $PSScriptRoot 'Test-DesktopPermissionSelectorFix.Unit.ps1')
 
     Write-Output 'PASS: configuration migration and preservation'
     Write-Output 'PASS: read-only assessment classification'
     Write-Output 'PASS: migration-consent and domain-injection guards'
     Write-Output 'PASS: unrestricted-network disclosure and acknowledgement guard'
-    Write-Output 'PASS: Custom permission activation handoff'
+    Write-Output 'PASS: Custom catalog and static routing handoff'
     if ($env:OS -eq 'Windows_NT') { Write-Output 'PASS: elevated sandbox proxy-port oscillation diagnostics' }
     Write-Output 'PASS: least-privilege and allowlist generation'
     Write-Output 'PASS: static and execpolicy verification'
@@ -343,6 +394,7 @@ unified_exec = true
     Write-Output 'PASS: rollback target-lock validation'
     Write-Output 'PASS: versioned upgrade migration and chained rollback'
     Write-Output 'PASS: exact rollback'
+    Write-Output 'PASS: fail-closed process-scoped Desktop selector loader lifecycle'
 }
 finally {
     if (Test-Path -LiteralPath $temporaryRoot) {

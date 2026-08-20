@@ -1,10 +1,11 @@
 Set-StrictMode -Version Latest
 
-$script:CssStateSchemaVersion = 5
-$script:CssProductVersion = '0.1.6'
+$script:CssStateSchemaVersion = 9
+$script:CssProductVersion = '0.2.0'
 $script:CssManagedStart = '# >>> codex-safe-setup managed >>>'
 $script:CssManagedEnd = '# <<< codex-safe-setup managed <<<'
 $script:CssProfileName = 'codex-safe-workspace'
+$script:CssOfflineProfileName = 'codex-safe-workspace-offline'
 
 function Get-CssCodexHome {
     param([string]$Override)
@@ -102,6 +103,9 @@ function Remove-CssManagedBlock {
 function Get-CssTomlSectionName {
     param([string]$Line)
 
+    if ($Line -match '^\s*\[\[([^\[\]]+)\]\]\s*(?:#.*)?$') {
+        return '__array__:' + $Matches[1].Trim()
+    }
     if ($Line -match '^\s*\[([^\[\]]+)\]\s*(?:#.*)?$') {
         return $Matches[1].Trim()
     }
@@ -179,15 +183,41 @@ function Remove-CssTomlSectionKeys {
     return ($resultLines -join [Environment]::NewLine).TrimEnd() + [Environment]::NewLine
 }
 
+function Get-CssTomlTopLevelStringValue {
+    param(
+        [AllowEmptyString()][string]$Text,
+        [Parameter(Mandatory)][string]$Key
+    )
+
+    $topLevel = $true
+    $keyPattern = '^\s*' + [regex]::Escape($Key) + '\s*=\s*(?<quote>["''])(?<value>[^"'']*)\k<quote>\s*(?:#.*)?$'
+    foreach ($line in [regex]::Split($Text, '\r?\n')) {
+        $parsedSection = Get-CssTomlSectionName -Line $line
+        if ($null -ne $parsedSection) {
+            $topLevel = $false
+            continue
+        }
+        if (-not $topLevel) { continue }
+
+        $match = [regex]::Match($line, $keyPattern)
+        if ($match.Success) {
+            return [pscustomobject]@{ Present = $true; Value = $match.Groups['value'].Value }
+        }
+    }
+    return [pscustomobject]@{ Present = $false; Value = $null }
+}
+
 function Get-CssPermissionProfileSettings {
     param([AllowEmptyString()][string]$Text)
 
-    $defaultMatch = [regex]::Match($Text, '(?m)^\s*default_permissions\s*=\s*["'']([^"'']+)["'']')
+    $defaultSetting = Get-CssTomlTopLevelStringValue -Text $Text -Key 'default_permissions'
     $managedProfilePresent = $Text -match '(?m)^\s*\[permissions\.codex-safe-workspace(?:\.|\])'
+    $offlineProfilePresent = $Text -match '(?m)^\s*\[permissions\.codex-safe-workspace-offline(?:\.|\])'
     return [pscustomobject]@{
-        DefaultPresent = [bool]$defaultMatch.Success
-        DefaultProfile = $(if ($defaultMatch.Success) { $defaultMatch.Groups[1].Value } else { $null })
+        DefaultPresent = [bool]$defaultSetting.Present
+        DefaultProfile = $defaultSetting.Value
         ManagedProfilePresent = [bool]$managedProfilePresent
+        OfflineProfilePresent = [bool]$offlineProfilePresent
     }
 }
 
@@ -282,12 +312,17 @@ function Set-CssTomlSectionValue {
 function Test-CssLegacySettings {
     param([AllowEmptyString()][string]$Text)
 
-    $withoutManaged = Remove-CssManagedBlock -Text $Text
-    $hasSandboxMode = $withoutManaged -match '(?m)^\s*sandbox_mode\s*='
-    $hasWorkspaceSection = $withoutManaged -match '(?m)^\s*\[sandbox_workspace_write\]'
+    $sandboxModeSetting = Get-CssTomlTopLevelStringValue -Text $Text -Key 'sandbox_mode'
+    $hasWorkspaceSection = $false
+    foreach ($line in [regex]::Split($Text, '\r?\n')) {
+        if ((Get-CssTomlSectionName -Line $line) -eq 'sandbox_workspace_write') {
+            $hasWorkspaceSection = $true
+            break
+        }
+    }
     return [pscustomobject]@{
-        Present = [bool]($hasSandboxMode -or $hasWorkspaceSection)
-        SandboxMode = [bool]$hasSandboxMode
+        Present = [bool]($sandboxModeSetting.Present -or $hasWorkspaceSection)
+        SandboxMode = [bool]$sandboxModeSetting.Present
         WorkspaceSection = [bool]$hasWorkspaceSection
     }
 }

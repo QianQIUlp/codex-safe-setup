@@ -48,11 +48,11 @@ if ($codexCommand) {
 else {
     $installCodex = $CodexCli -eq 'Install'
     if ($CodexCli -eq 'Ask') {
-        Write-Output 'Codex CLI is recommended for version checks and execpolicy rule verification. Base configuration can continue without it.'
+        Write-Output 'Codex CLI is required for the default DynamicUi route (0.138.0 or newer). Only a StrictProfile plan can continue without it, with partial verification.'
         $installCodex = Confirm-InstallChoice -Prompt 'Install Codex CLI globally with npm?'
     }
     if (-not $installCodex) {
-        $results.Add([pscustomobject]@{ Component = 'Codex CLI'; Status = 'Skipped'; Detail = 'Verification will be partial' })
+        $results.Add([pscustomobject]@{ Component = 'Codex CLI'; Status = 'Skipped'; Detail = 'DynamicUi apply will be blocked; StrictProfile verification will be partial' })
     }
     else {
         $npmCommand = Get-Command npm -ErrorAction SilentlyContinue | Select-Object -First 1
