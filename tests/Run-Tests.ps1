@@ -406,3 +406,7 @@ finally {
         Remove-Item -LiteralPath $resolvedTemporary -Recurse -Force
     }
 }
+
+# A deliberately failing native probe is exercised and asserted above. Do not
+# leak its expected nonzero code as the successful test process result.
+$global:LASTEXITCODE = 0
