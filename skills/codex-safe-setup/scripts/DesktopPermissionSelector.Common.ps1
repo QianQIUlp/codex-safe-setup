@@ -50,8 +50,19 @@ function Get-CssDesktopPackageInfo {
             if (-not $PackageVersion) { $PackageVersion = [string]$manifest.Package.Identity.Version }
             $packageName = [string]$manifest.Package.Identity.Name
             $publisher = [string]$manifest.Package.Identity.Publisher
-            $publisherId = [string]$manifest.Package.Identity.PublisherId
-            $packageFamilyName = [string]$manifest.Package.Identity.PackageFamilyName
+            $publisherIdProperty = $manifest.Package.Identity.PSObject.Properties['PublisherId']
+            $publisherId = if ($null -ne $publisherIdProperty) { [string]$publisherIdProperty.Value } else { '' }
+            $packageFamilyProperty = $manifest.Package.Identity.PSObject.Properties['PackageFamilyName']
+            $packageFamilyName = if ($null -ne $packageFamilyProperty) { [string]$packageFamilyProperty.Value } else { '' }
+            if (-not $publisherId -and $resolvedLocation -match '__([^\\]+)$') {
+                $publisherId = $Matches[1]
+            }
+            if (-not $publisherId -and $packageFamilyName -match '_([^_]+)$') {
+                $publisherId = $Matches[1]
+            }
+            if (-not $packageFamilyName -and $packageName -and $publisherId) {
+                $packageFamilyName = $packageName + '_' + $publisherId
+            }
         }
         if (-not $PackageVersion) {
             throw 'Pass -PackageVersion when -InstallLocation does not contain a readable AppxManifest.xml.'
@@ -74,7 +85,11 @@ function Get-CssDesktopPackageInfo {
         $PackageVersion = [string]$package.Version
         $packageName = [string]$package.Name
         $packageFamilyName = [string]$package.PackageFamilyName
-        $publisherId = [string]$package.PublisherId
+        $publisherIdProperty = $package.PSObject.Properties['PublisherId']
+        $publisherId = if ($null -ne $publisherIdProperty) { [string]$publisherIdProperty.Value } else { '' }
+        if (-not $publisherId -and $packageFamilyName -match '_([^_]+)$') {
+            $publisherId = $Matches[1]
+        }
         $publisher = [string]$package.Publisher
     }
 

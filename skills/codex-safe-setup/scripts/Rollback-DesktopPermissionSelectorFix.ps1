@@ -59,7 +59,16 @@ if (-not $ConfirmRollback) {
     if ((Read-Host 'Type ROLLBACK to disable the lightweight Desktop selector loader') -cne 'ROLLBACK') { throw 'Rollback was not confirmed.' }
 }
 
-$package = Get-CssDesktopPackageInfo -InstallLocation ([string]$state.sourceInstallLocation) -PackageVersion ([string]$state.sourcePackageVersion)
+$recordedInstallLocation = [string]$state.sourceInstallLocation
+$package = if ($recordedInstallLocation -and (Test-Path -LiteralPath $recordedInstallLocation -PathType Container)) {
+    Get-CssDesktopPackageInfo -InstallLocation $recordedInstallLocation -PackageVersion ([string]$state.sourcePackageVersion)
+}
+else {
+    # A rollback may cross an official Desktop update whose old WindowsApps
+    # directory is gone.  The recorded package is only needed to identify
+    # a live loader process; use the current signed package for that check.
+    Get-CssDesktopPackageInfo
+}
 $marker = $script:CssDesktopSelectorLaunchMarkerPrefix + [string]$state.installationId
 $activeLoaderProcesses = @(Get-CssDesktopRootProcesses -ExecutablePath $package.ExecutablePath | Where-Object {
     ([string]$_.CommandLine).IndexOf($marker, [StringComparison]::OrdinalIgnoreCase) -ge 0
