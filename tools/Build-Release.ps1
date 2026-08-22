@@ -74,20 +74,14 @@ try {
         if ($entryNames -notcontains 'skills/codex-safe-setup/scripts/Test-DesktopPermissionE2E.ps1') {
             throw 'Built archive is missing the real Desktop end-to-end verifier.'
         }
-        foreach ($requiredEntry in @(
-            'skills/codex-safe-setup/scripts/Install-DesktopPermissionSelectorFix.ps1',
-            'skills/codex-safe-setup/scripts/Test-DesktopPermissionSelectorFix.ps1',
-            'skills/codex-safe-setup/scripts/Rollback-DesktopPermissionSelectorFix.ps1',
-            'skills/codex-safe-setup/assets/desktop-permission-selector/permission-selector-loader.cjs',
-            'skills/codex-safe-setup/assets/desktop-permission-selector/permission-selector-preload.cjs',
-            'skills/codex-safe-setup/assets/desktop-permission-selector/Start-CodexFixed.ps1',
-            'skills/codex-safe-setup/assets/desktop-permission-selector/Watch-CodexDesktop.ps1',
-            'skills/codex-safe-setup/assets/desktop-permission-selector/Recertify-CodexDesktop.ps1',
-            'skills/codex-safe-setup/scripts/DesktopPermissionSelector.Common.ps1'
-        )) {
-            if ($entryNames -notcontains $requiredEntry) {
-                throw "Built archive is missing Desktop compatibility source: $requiredEntry"
-            }
+        if ($entryNames -notcontains 'skills/codex-safe-setup/scripts/Remove-LegacyDesktopSelectorArtifacts.ps1') {
+            throw 'Built archive is missing the legacy selector artifact cleanup script.'
+        }
+        $removedCompatEntries = @($entryNames | Where-Object {
+            $_ -match '(?i)desktop-permission-selector|DesktopPermissionSelector|permission-selector-(loader|preload)|Start-CodexFixed|Watch-CodexDesktop|Recertify-CodexDesktop'
+        })
+        if ($removedCompatEntries.Count -gt 0) {
+            throw "Built archive still contains removed Desktop compatibility sources: $($removedCompatEntries -join ', ')"
         }
         $forbiddenClientEntries = @($entryNames | Where-Object {
             $_ -match '(?i)(?:^|/)(?:ChatGPT\.exe|codex\.exe|app\.asar)$' -or

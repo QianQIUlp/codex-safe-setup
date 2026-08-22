@@ -186,7 +186,7 @@ export const en: UiContent = {
             detail: 'Explicitly denied only by StrictProfile. DynamicUi cannot use sticky deny-globs inside a writable workspace.',
           },
         ],
-        note: 'DynamicUi installs two positive-only runtime profiles. A separate optional Windows compatibility layer handles affected selector-label oscillation without redistributing client files. Workspace credential files remain readable; use StrictProfile for persistent explicit denies.',
+        note: 'DynamicUi installs two positive-only runtime profiles. Workspace credential files remain readable; use StrictProfile for persistent explicit denies.',
       },
       {
         id: 'network',
@@ -351,7 +351,7 @@ export const en: UiContent = {
     promptText:
       'Use $codex-safe-setup to audit my current permissions and install the recommended profile.',
     releaseNote:
-      'Version 0.2.0 adds an optional, acknowledged Windows selector loader without creating a client copy. Compatible official updates are recertified automatically; incompatible changes fail closed. The GitHub marketplace follows main, whose catalog pins the latest release.',
+      'Version 0.2.1 removes the retired Windows selector compatibility layer from 0.2.0 and ships a cleanup script for legacy autostart remnants. The GitHub marketplace follows main, whose catalog pins the latest release.',
     shaNote:
       'Each release also ships an install-ready ZIP with a .sha256 file. Verify the archive in PowerShell with Get-FileHash -Algorithm SHA256 <archive>.',
     detailsCta: {
