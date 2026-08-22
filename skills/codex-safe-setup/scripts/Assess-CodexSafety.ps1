@@ -48,7 +48,7 @@ $managedFilesystemSectionText = Get-CssTomlSectionText -Text $configText -Sectio
 $managedWorkspaceSectionText = Get-CssTomlSectionText -Text $configText -Section 'permissions.codex-safe-workspace.filesystem.":workspace_roots"'
 $offlineFilesystemSectionText = Get-CssTomlSectionText -Text $configText -Section 'permissions.codex-safe-workspace-offline.filesystem'
 $offlineWorkspaceSectionText = Get-CssTomlSectionText -Text $configText -Section 'permissions.codex-safe-workspace-offline.filesystem.":workspace_roots"'
-$catalogProfileAvailable = $configText.Contains($script:CssManagedStart) -and $profileSettings.ManagedProfilePresent
+$catalogProfileAvailable = ($configText.Contains($script:CssManagedStart) -or $configText.Contains($script:CssTomlProfileStart)) -and $profileSettings.ManagedProfilePresent
 $managedProfileHasExplicitDeny = ($managedFilesystemSectionText + [Environment]::NewLine + $managedWorkspaceSectionText) -match '(?m)^\s*[^#\r\n]+?\s*=\s*"deny"\s*$'
 $offlineProfileHasExplicitDeny = ($offlineFilesystemSectionText + [Environment]::NewLine + $offlineWorkspaceSectionText) -match '(?m)^\s*[^#\r\n]+?\s*=\s*"deny"\s*$'
 $managedProfileAvailable = $catalogProfileAvailable -and $managedFilesystemSectionText -match '(?m)^\s*":root"\s*=\s*"deny"'

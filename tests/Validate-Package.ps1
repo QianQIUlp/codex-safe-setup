@@ -16,6 +16,7 @@ $upgradeScriptPath = Join-Path $skillRoot 'scripts/Upgrade-CodexSafety.ps1'
 $desktopE2eScriptPath = Join-Path $skillRoot 'scripts/Test-DesktopPermissionE2E.ps1'
 $desktopE2eWrapperPath = Join-Path $repositoryRoot 'tests/Test-DesktopPermissionE2E.ps1'
 $legacyCleanupScriptPath = Join-Path $skillRoot 'scripts/Remove-LegacyDesktopSelectorArtifacts.ps1'
+$tomlEditorScriptPath = Join-Path $skillRoot 'scripts/TomlConfigEditor.ps1'
 $installScriptPath = Join-Path $skillRoot 'scripts/Install-CodexSafety.ps1'
 $assessScriptPath = Join-Path $skillRoot 'scripts/Assess-CodexSafety.ps1'
 $testScriptPath = Join-Path $skillRoot 'scripts/Test-CodexSafety.ps1'
@@ -40,6 +41,7 @@ $requiredFiles = @(
     $desktopE2eScriptPath,
     $desktopE2eWrapperPath,
     $legacyCleanupScriptPath,
+    $tomlEditorScriptPath,
     $installScriptPath,
     $assessScriptPath,
     $testScriptPath,
@@ -87,7 +89,7 @@ foreach ($entry in $utf8Sentinels.GetEnumerator()) {
 $manifestText = [IO.File]::ReadAllText($manifestPath)
 $manifest = $manifestText | ConvertFrom-Json
 Assert-True ($manifest.name -eq 'codex-safe-setup') 'Plugin name must remain codex-safe-setup.'
-Assert-True ($manifest.version -eq '0.2.1') 'Release package must use version 0.2.1.'
+Assert-True ($manifest.version -eq '0.3.0') 'Release package must use version 0.3.0.'
 Assert-True ($manifest.version -match '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$') 'Plugin version must be strict semver.'
 Assert-True (-not [string]::IsNullOrWhiteSpace($manifest.description)) 'Plugin description is required.'
 Assert-True (-not [string]::IsNullOrWhiteSpace($manifest.author.name)) 'Plugin author name is required.'

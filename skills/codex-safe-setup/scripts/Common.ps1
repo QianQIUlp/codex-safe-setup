@@ -1,7 +1,7 @@
 Set-StrictMode -Version Latest
 
 $script:CssStateSchemaVersion = 9
-$script:CssProductVersion = '0.2.1'
+$script:CssProductVersion = '0.3.0'
 $script:CssManagedStart = '# >>> codex-safe-setup managed >>>'
 $script:CssManagedEnd = '# <<< codex-safe-setup managed <<<'
 $script:CssProfileName = 'codex-safe-workspace'
@@ -91,6 +91,63 @@ function ConvertTo-CssStarlarkString {
     return '"' + $escaped + '"'
 }
 
+function Get-CssFileTextSha256 {
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Text)
+
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [Text.UTF8Encoding]::new($false).GetBytes($Text)
+        return ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-', '').ToLowerInvariant()
+    }
+    finally {
+        $sha.Dispose()
+    }
+}
+
+function Invoke-CssGuardedConfigWrite {
+    <#
+    Replaces a configuration file only when the on-disk bytes still match the
+    content the plan was generated from, and verifies the written bytes
+    afterwards. Any mismatch aborts without touching the file, or restores the
+    exact previous bytes when the verification fails after writing.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$ExpectedOriginalSha256,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$NewText
+    )
+
+    $originalBytes = $null
+    $fileExists = Test-Path -LiteralPath $Path -PathType Leaf
+    if ($fileExists) {
+        $currentBytes = [IO.File]::ReadAllBytes($Path)
+        $originalBytes = $currentBytes
+        $currentText = [Text.UTF8Encoding]::new($false, $true).GetString($currentBytes)
+        if ((Get-CssFileTextSha256 -Text $currentText) -ne $ExpectedOriginalSha256.ToLowerInvariant()) {
+            throw ("CONCURRENT_MODIFICATION: '{0}' changed since the plan was generated. Re-run the plan against the current content." -f $Path)
+        }
+    }
+
+    Write-CssTextAtomic -Path $Path -Text $NewText
+
+    try {
+        $writtenBytes = [IO.File]::ReadAllBytes($Path)
+        $writtenText = [Text.UTF8Encoding]::new($false, $true).GetString($writtenBytes)
+        if ((Get-CssFileTextSha256 -Text $writtenText) -ne (Get-CssFileTextSha256 -Text $NewText)) {
+            throw 'POST_WRITE_VERIFICATION_FAILED'
+        }
+    }
+    catch {
+        if ($null -ne $originalBytes) {
+            [IO.File]::WriteAllBytes($Path, $originalBytes)
+        }
+        elseif (Test-Path -LiteralPath $Path -PathType Leaf) {
+            Remove-Item -LiteralPath $Path -Force
+        }
+        throw
+    }
+}
+
 function Remove-CssManagedBlock {
     param([AllowEmptyString()][string]$Text)
 
@@ -142,6 +199,7 @@ function Remove-CssTomlTopLevelKeys {
     foreach ($key in $Keys) { $keySet[$key] = $true }
     $sectionName = ''
     $resultLines = [Collections.Generic.List[string]]::new()
+    $nl = Get-CssTomlNewlineStyle -Text $Text
     foreach ($line in [regex]::Split($Text, '\r?\n')) {
         $parsedSection = Get-CssTomlSectionName -Line $line
         if ($null -ne $parsedSection) {
@@ -154,7 +212,7 @@ function Remove-CssTomlTopLevelKeys {
         }
         $resultLines.Add($line)
     }
-    return ($resultLines -join [Environment]::NewLine).TrimEnd() + [Environment]::NewLine
+    return ($resultLines -join $nl).TrimEnd() + $nl
 }
 
 function Remove-CssTomlSectionKeys {
@@ -168,6 +226,7 @@ function Remove-CssTomlSectionKeys {
     foreach ($key in $Keys) { $keySet[$key] = $true }
     $currentSection = ''
     $resultLines = [Collections.Generic.List[string]]::new()
+    $nl = Get-CssTomlNewlineStyle -Text $Text
     foreach ($line in [regex]::Split($Text, '\r?\n')) {
         $parsedSection = Get-CssTomlSectionName -Line $line
         if ($null -ne $parsedSection) {
@@ -180,7 +239,7 @@ function Remove-CssTomlSectionKeys {
         }
         $resultLines.Add($line)
     }
-    return ($resultLines -join [Environment]::NewLine).TrimEnd() + [Environment]::NewLine
+    return ($resultLines -join $nl).TrimEnd() + $nl
 }
 
 function Get-CssTomlTopLevelStringValue {
@@ -229,6 +288,7 @@ function Remove-CssTomlSections {
 
     $resultLines = [Collections.Generic.List[string]]::new()
     $skip = $false
+    $nl = Get-CssTomlNewlineStyle -Text $Text
     foreach ($line in [regex]::Split($Text, '\r?\n')) {
         $parsedSection = Get-CssTomlSectionName -Line $line
         if ($null -ne $parsedSection) {
@@ -242,7 +302,7 @@ function Remove-CssTomlSections {
         }
         if (-not $skip) { $resultLines.Add($line) }
     }
-    return ($resultLines -join [Environment]::NewLine).TrimEnd() + [Environment]::NewLine
+    return ($resultLines -join $nl).TrimEnd() + $nl
 }
 
 function Set-CssTomlTopLevelValue {
@@ -253,6 +313,7 @@ function Set-CssTomlTopLevelValue {
     )
 
     $cleanText = Remove-CssTomlTopLevelKeys -Text $Text -Keys @($Key)
+    $nl = Get-CssTomlNewlineStyle -Text $cleanText
     $lines = [Collections.Generic.List[string]]::new()
     foreach ($line in [regex]::Split($cleanText.TrimEnd(), '\r?\n')) { $lines.Add($line) }
     $insertAt = $lines.Count
@@ -263,7 +324,7 @@ function Set-CssTomlTopLevelValue {
         }
     }
     $lines.Insert($insertAt, "$Key = $Literal")
-    return ($lines -join [Environment]::NewLine).Trim() + [Environment]::NewLine
+    return ($lines -join $nl).Trim() + $nl
 }
 
 function Set-CssTomlSectionValue {
@@ -274,6 +335,7 @@ function Set-CssTomlSectionValue {
         [Parameter(Mandatory)][string]$Literal
     )
 
+    $nl = Get-CssTomlNewlineStyle -Text $Text
     $lines = [Collections.Generic.List[string]]::new()
     foreach ($line in [regex]::Split($Text.TrimEnd(), '\r?\n')) { $lines.Add($line) }
     $sectionStart = -1
@@ -295,18 +357,18 @@ function Set-CssTomlSectionValue {
         if ($lines.Count -gt 0 -and $lines[$lines.Count - 1].Trim()) { $lines.Add('') }
         $lines.Add("[$Section]")
         $lines.Add("$Key = $Literal")
-        return ($lines -join [Environment]::NewLine).Trim() + [Environment]::NewLine
+        return ($lines -join $nl).Trim() + $nl
     }
 
     $keyPattern = '^\s*' + [regex]::Escape($Key) + '\s*='
     for ($index = $sectionStart + 1; $index -lt $sectionEnd; $index++) {
         if ($lines[$index] -match $keyPattern) {
             $lines[$index] = "$Key = $Literal"
-            return ($lines -join [Environment]::NewLine).Trim() + [Environment]::NewLine
+            return ($lines -join $nl).Trim() + $nl
         }
     }
     $lines.Insert($sectionStart + 1, "$Key = $Literal")
-    return ($lines -join [Environment]::NewLine).Trim() + [Environment]::NewLine
+    return ($lines -join $nl).Trim() + $nl
 }
 
 function Test-CssLegacySettings {
@@ -461,4 +523,10 @@ function New-CssCheck {
         [Parameter(Mandatory)][string]$Evidence
     )
     return [pscustomobject]@{ Status = $Status; Control = $Control; Evidence = $Evidence }
+}
+
+# Structural TOML editing and managed-region ownership (v0.3.0+).
+$tomlEditorScript = Join-Path $PSScriptRoot 'TomlConfigEditor.ps1'
+if (Test-Path -LiteralPath $tomlEditorScript -PathType Leaf) {
+    . $tomlEditorScript
 }

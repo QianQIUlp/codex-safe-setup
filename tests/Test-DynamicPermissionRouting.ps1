@@ -92,7 +92,7 @@ try {
     Assert-Routing ($dynamicText -match '(?ms)\[permissions\.codex-safe-workspace\.network\].*enabled\s*=\s*false') 'DynamicUi Off mode must disable primary Custom command networking.'
     Assert-Routing ($dynamicText -match '(?ms)\[permissions\.codex-safe-workspace-offline\.network\].*enabled\s*=\s*false') 'The offline compatibility profile must always disable command networking.'
     $dynamicInstallState = Get-Content -LiteralPath (Join-Path $dynamicState 'install-state.json') -Raw | ConvertFrom-Json
-    Assert-Routing ($dynamicInstallState.schemaVersion -eq 9 -and $dynamicInstallState.productVersion -eq '0.2.1') 'DynamicUi install state must record the current release version with schema 9.'
+    Assert-Routing ($dynamicInstallState.schemaVersion -eq 9 -and $dynamicInstallState.productVersion -eq '0.3.0') 'DynamicUi install state must record the current release version with schema 9.'
     Assert-Routing ($dynamicInstallState.PermissionRouting -eq 'DynamicUi') 'DynamicUi install state must record its routing mode.'
     Assert-Routing ($dynamicInstallState.DynamicUiDisplayRoute -eq 'DualNamedProfiles') 'DynamicUi install state must record the dual named-profile display route.'
     Assert-Routing (-not $dynamicInstallState.ProtectWorkspaceSecrets) 'DynamicUi must record that sticky credential deny-globs are not installed.'
@@ -314,7 +314,7 @@ default_permissions = ":danger-full-access"
     Assert-Routing ($repairedText -match '(?m)^\s*default_permissions\s*=\s*":workspace"') 'Upgrade must install the built-in Workspace startup default.'
     Assert-Routing ($repairedText -match '(?m)^\s*\[permissions\.codex-safe-workspace\]' -and $repairedText -match '(?m)^\s*\[permissions\.codex-safe-workspace-offline\]') 'Upgrade must install both named Custom profiles.'
     $repairedState = Get-Content -LiteralPath $mixedStatePath -Raw | ConvertFrom-Json
-    Assert-Routing ($repairedState.schemaVersion -eq 9 -and $repairedState.productVersion -eq '0.2.1' -and $repairedState.PermissionRouting -eq 'DynamicUi' -and $repairedState.DynamicUiDisplayRoute -eq 'DualNamedProfiles') 'Upgrade must record the current DynamicUi release state.'
+    Assert-Routing ($repairedState.schemaVersion -eq 9 -and $repairedState.productVersion -eq '0.3.0' -and $repairedState.PermissionRouting -eq 'DynamicUi' -and $repairedState.DynamicUiDisplayRoute -eq 'DualNamedProfiles') 'Upgrade must record the current DynamicUi release state.'
 
     $developmentState = Get-Content -LiteralPath $mixedStatePath -Raw | ConvertFrom-Json
     $developmentState.schemaVersion = 8
@@ -324,7 +324,7 @@ default_permissions = ":danger-full-access"
     Assert-Routing ($developmentPreview -match 'No files changed') 'A schema-8 development-state migration must remain plan-first.'
     & $upgradeScript -CodexHome $mixedHome -ConfigPath $mixedConfig -StateRoot $mixedState -MigrateLegacySettings -AcknowledgeDynamicUiReadScope -ConfirmUpgrade -NonInteractive | Out-Null
     $releasedState = Get-Content -LiteralPath $mixedStatePath -Raw | ConvertFrom-Json
-    Assert-Routing ($releasedState.schemaVersion -eq 9 -and $releasedState.productVersion -eq '0.2.1') 'The unreleased 0.1.9 schema-8 state must migrate to the current release state.'
+    Assert-Routing ($releasedState.schemaVersion -eq 9 -and $releasedState.productVersion -eq '0.3.0') 'The unreleased 0.1.9 schema-8 state must migrate to the current release state.'
 
     Write-Output 'PASS: known config-derived selector fallbacks are absent from the dual named-profile route'
     Write-Output 'PASS: static verification requires the authoritative dual named-profile runtime shape'

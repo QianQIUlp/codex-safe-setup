@@ -2,6 +2,19 @@
 
 All notable changes are documented here. Releases follow semantic versioning.
 
+## 0.3.0 - 2026-08-22
+
+### Added
+
+- Add scope-aware structural TOML editing (`TomlConfigEditor.ps1`). The installer now understands which section every key actually lives in, detects the swallowed-top-level-key failure mode that produced the 2026-08 incident (keys such as `default_permissions`, `notify`, `model` silently becoming members of `[model_providers.openrouter]` / `[windows]`), and refuses to write any candidate that fails structural validation.
+- Split the managed configuration into two explicitly owned regions: a `codex-safe-setup top-level` block placed strictly before the first `[table]`, and a `codex-safe-setup profiles` block at the end of the file. The retired single managed block migrates automatically on the next install or upgrade.
+- Report foreign misplaced keys by name, section, and line. Plugin-owned keys are repaired automatically; keys owned by other writers are relocated only after explicit `-RepairForeignMisplacedKeys` confirmation, and relocation never overwrites an existing top-level value — collisions are reported as `SCOPE CONFLICT` instead.
+- Guard every configuration write with a SHA-256 concurrency check: bytes changed since the plan was generated abort the write with `CONCURRENT_MODIFICATION`; post-write verification restores exact prior bytes if verification fails.
+
+### Changed
+
+- All TOML editing preserves the document's existing newline style and comments.
+
 ## 0.2.1 - 2026-08-22
 
 ### Removed

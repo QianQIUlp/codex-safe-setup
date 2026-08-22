@@ -42,6 +42,8 @@ Both DynamicUi Custom profiles extend Codex's Workspace sandbox and contain no e
 
 The installer preserves unrelated TOML content, backs up each managed target, writes the selected permission route and rule, registers authorized workspace roots, installs a synthetic outside-workspace canary, and records rollback state.
 
+Since 0.3.0 the installer edits TOML structurally. Plugin-owned top-level settings live in a `codex-safe-setup top-level` block placed strictly before the first `[table]`, and the named profiles live in a `codex-safe-setup profiles` block at the end of the file; both regions carry generated markers and are regenerated wholesale on every install or upgrade. Before any write, the candidate must pass structural validation (misplaced top-level keys, duplicate tables or top-level keys, unterminated multi-line values, and managed-block ordering all fail closed). Keys that belong to other writers but sit under a wrong `[table]` are reported by name, section, and line; `-RepairForeignMisplacedKeys` relocates them to the top level only when no same-named key already exists there, so the plugin never silently picks between two user-owned values. Every configuration write re-verifies the file's SHA-256 against the plan-time snapshot (`CONCURRENT_MODIFICATION` abort) and confirms the written bytes afterwards, restoring exact prior content if verification fails.
+
 A machine-configuration change needs one fresh task. After that activation, DynamicUi changes are different: select Custom, Full Access, Workspace, or Read-only and send the next user message; the same task must adopt the corresponding policy without restarting Codex. If administrator prompts repeat on Windows, close every Codex desktop and CLI process before one clean relaunch.
 
 The Windows sandbox stores firewall setup for the active network route. `Allowlist` expects loopback proxy ports 3128 and 8081; `Off` and direct `Unrestricted` expect no proxy ports. If an older task and a newly configured task use different port sets, each can invalidate the other's global setup and cause another administrator prompt. The read-only assessment retains only matching firewall port-change records from Codex's sandbox log and reports `WindowsSandboxSetupHealth`; it never includes logged command lines. A `CONFLICT` means the latest setup does not match the selected mode. `OSCILLATION_HISTORY` means a direct reversal occurred but the latest setup is aligned, so verification passes and no action is required unless prompts recur.
@@ -50,7 +52,7 @@ The Windows sandbox stores firewall setup for the active network route. `Allowli
 
 `Upgrade-CodexSafety.ps1` reads the active install state and preserves its recorded selections by default. Running it without `-ConfirmUpgrade` is plan-only. A confirmed upgrade creates a unique transaction directory under `safe-setup/backups`, snapshots the previous active state under `safe-setup/state-history`, and then invokes the same deterministic installer in explicit upgrade mode.
 
-Version 0.1.5 removed the alternate Status/Commit Git backend and rewrote old workspace registries to Save/List-only recovery. Version 0.1.6 migrated schema 4 to schema 5. The 0.1.7-0.1.9 development cycle tested several DynamicUi representations. Version 0.2.0 migrates to schema 9, keeps the verified positive-only runtime route, and handles affected Windows label oscillation through a separate optional compatibility layer. Plugin refresh, machine configuration, Desktop compatibility state, and already-running task remain separate layers.
+Version 0.1.5 removed the alternate Status/Commit Git backend and rewrote old workspace registries to Save/List-only recovery. Version 0.1.6 migrated schema 4 to schema 5. The 0.1.7-0.1.9 development cycle tested several DynamicUi representations. Version 0.2.0 migrated to schema 9 and kept the verified positive-only runtime route. Version 0.3.0 keeps schema 9 and replaces the retired Desktop compatibility layer reference with structural TOML ownership: legacy single managed blocks migrate automatically on the next install or upgrade. Plugin refresh, machine configuration, and already-running task remain separate layers.
 
 ### 5. Verify
 
@@ -86,7 +88,8 @@ Exact locations depend on `CODEX_HOME`, which defaults to the normal Codex user 
 
 | Target | Purpose |
 |---|---|
-| `config.toml` | Active permission, approval, sandbox, and network selections |
+| `config.toml` — `codex-safe-setup top-level` block | Plugin-owned top-level settings (`default_permissions`, StrictProfile approval keys), placed before the first `[table]` |
+| `config.toml` — `codex-safe-setup profiles` block | Named permission profiles owned by the plugin, appended at the end of the file |
 | `rules/codex-safe-setup.rules` | Exact Save/List recovery bridge rule |
 | `safe-setup/bin/New-CodexCheckpoint.ps1` | Installed narrow recovery bridge |
 | `safe-setup/authorized-workspaces.json` | Canonical roots and pinned Git for recovery checkpoints |
