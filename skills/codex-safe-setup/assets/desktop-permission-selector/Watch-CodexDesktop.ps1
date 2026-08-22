@@ -23,12 +23,10 @@ if (-not $hasWindowsPowerShellModules) {
 }
 
 $loaderRoot = [IO.Path]::GetFullPath((Split-Path -Parent $PSCommandPath))
-$launcher = Join-Path $loaderRoot 'Start-CodexFixed.ps1'
 $statePath = Join-Path $loaderRoot 'desktop-selector-state.json'
 $pidPath = Join-Path $loaderRoot 'watcher.pid.json'
 $watcherStatusPath = Join-Path $loaderRoot 'watcher-status.json'
-if (-not (Test-Path -LiteralPath $launcher -PathType Leaf) -or
-    -not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
+if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
     exit 0
 }
 $state = [IO.File]::ReadAllText($statePath) | ConvertFrom-Json
@@ -75,39 +73,27 @@ function Test-GraceProcess {
     return $false
 }
 
-function Test-NeedsRepair {
+function Get-RoutingObservation {
     $package = Get-AppxPackage -Name OpenAI.Codex -ErrorAction SilentlyContinue |
         Sort-Object Version -Descending |
         Select-Object -First 1
-    if ($null -eq $package) { return $false }
+    if ($null -eq $package) { return 'no-official-desktop' }
     $executable = [IO.Path]::GetFullPath((Join-Path ([string]$package.InstallLocation) 'app\ChatGPT.exe'))
     $processes = @(Get-CimInstance Win32_Process -Filter "Name = 'ChatGPT.exe'" -ErrorAction SilentlyContinue |
         Where-Object { $_.ExecutablePath -and (Test-SamePath -Left ([string]$_.ExecutablePath) -Right $executable) })
     $ids = @($processes | ForEach-Object { [int]$_.ProcessId })
     $roots = @($processes | Where-Object { $_.ParentProcessId -notin $ids })
+    if (@($roots).Count -eq 0) { return 'no-official-desktop' }
     foreach ($root in $roots) {
-        if (([string]$root.CommandLine).IndexOf($marker, [StringComparison]::OrdinalIgnoreCase) -ge 0) { continue }
-        if (Test-GraceProcess -Process $root) { continue }
+        if (([string]$root.CommandLine).IndexOf($marker, [StringComparison]::OrdinalIgnoreCase) -ge 0) { return 'already-active' }
+    }
+    foreach ($root in $roots) {
+        if (Test-GraceProcess -Process $root) { return 'preserve-current-task' }
         $legacyAppDirectory = [string]$state.legacyDerivedAppDirectory
         if ($legacyAppDirectory -and
-            ([string]$root.CommandLine).IndexOf($legacyAppDirectory, [StringComparison]::OrdinalIgnoreCase) -ge 0) { continue }
-        return $true
+            ([string]$root.CommandLine).IndexOf($legacyAppDirectory, [StringComparison]::OrdinalIgnoreCase) -ge 0) { return 'preserve-current-task' }
     }
-    return $false
-}
-
-function Invoke-SelectorRepair {
-    param([scriptblock]$Action)
-    if ($null -eq $Action) { $Action = { & $launcher } }
-    try {
-        & $Action
-        Write-WatcherStatus -Status 'RUNNING' -Message 'The watcher completed the latest Desktop routing check.'
-        return $true
-    }
-    catch {
-        Write-WatcherStatus -Status 'REPAIR_FAILED' -Message $_.Exception.Message -ErrorRecord $_
-        return $false
-    }
+    return 'manual-action-required'
 }
 
 $sourceIdentifier = 'CodexSafeSetupDesktopProcessStart'
@@ -119,8 +105,13 @@ try {
         installationId = [string]$state.installationId
     }
     [IO.File]::WriteAllText($pidPath, ($pidRecord | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
-    Write-WatcherStatus -Status 'RUNNING' -Message 'The Desktop process watcher is active.'
-    if (Test-NeedsRepair) { [void](Invoke-SelectorRepair) }
+    $observation = Get-RoutingObservation
+    if ($observation -eq 'manual-action-required') {
+        Write-WatcherStatus -Status 'MANUAL_ACTION_REQUIRED' -Message 'An ordinary Codex Desktop process is running without the selector loader. Exit Codex completely, then start it from the Codex (Stable Permissions) shortcut. The watcher never closes or restarts Desktop.'
+    }
+    else {
+        Write-WatcherStatus -Status 'RUNNING' -Message "The observational Desktop routing watcher is active (route: $observation); running Desktop processes are never modified."
+    }
 
     $null = Register-CimIndicationEvent -Query 'SELECT * FROM Win32_ProcessStartTrace' -SourceIdentifier $sourceIdentifier
     while ($true) {
@@ -130,7 +121,10 @@ try {
             $name = [string]$event.SourceEventArgs.NewEvent.ProcessName
             if ($name -ne 'ChatGPT.exe') { continue }
             Start-Sleep -Milliseconds 300
-            if (Test-NeedsRepair) { [void](Invoke-SelectorRepair) }
+            $observation = Get-RoutingObservation
+            if ($observation -eq 'manual-action-required') {
+                Write-WatcherStatus -Status 'MANUAL_ACTION_REQUIRED' -Message 'An ordinary Codex Desktop process is running without the selector loader. Exit Codex completely, then start it from the Codex (Stable Permissions) shortcut. The watcher never closes or restarts Desktop.'
+            }
         }
         finally {
             Remove-Event -EventIdentifier $event.EventIdentifier -ErrorAction SilentlyContinue

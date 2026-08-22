@@ -2,6 +2,16 @@
 
 All notable changes are documented here. Releases follow semantic versioning.
 
+## Unreleased
+
+### Desktop selector compatibility hardening (issue #17 follow-up)
+
+- Stop automatically closing or force-terminating a running official Codex Desktop. When an ordinary uninstrumented Desktop root already exists, the launcher records `MANUAL_ACTION_REQUIRED` with an audit PID list and fails closed; you fully quit Codex and start it from the dedicated shortcut instead.
+- Make the per-user startup watcher opt-in via `-EnableStartupWatcher` and observational by design: it records routing status only and never invokes the launcher against a live Desktop.
+- Archive and remove autostart shortcuts that provably point at the legacy `desktop-ui-fix` watcher before any installation state changes, eliminating the stale `Watch-CodexDesktop.vbs` login popup after upgrades. Matching combines the `wscript.exe` target with normalized arguments; same-name or unrelated entries are always preserved, every removal is copied into recovery history with metadata, and repeated runs are idempotent.
+- Retire the previous generation's startup watcher entry during upgrades when `-EnableStartupWatcher` is not passed, so at most one registration can exist.
+- Rollback no longer recreates startup-watcher autostart entries and never launches any process, preventing accidental resurrection of a legacy watcher.
+
 ## 0.2.0 - 2026-08-20
 
 - Preserve the verified runtime rule that the last deliberate selector click governs the next turn. DynamicUi uses built-in Workspace as its startup default plus two positive-only named profiles, with no sticky filesystem deny entries.

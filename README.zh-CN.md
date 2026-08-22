@@ -52,7 +52,9 @@ codex plugin add codex-safe-setup@codex-safe-setup
 
 0.2.0 保留了 0.1.7–0.1.9 开发阶段已经验证的运行时规则：下一轮实际权限由最后一次手动点击决定。DynamicUi 只把内建 Workspace 作为启动默认值，并提供两个纯正向授权配置：`codex-safe-workspace` 与 `codex-safe-workspace-offline`；这些动态选项不会加入会跨选择保留的文件系统 deny。
 
-部分 Windows Desktop 构建仍可能在发送或完成期间显示另一个标签，即使实际路由正确。0.2.0 因此提供独立、可选的兼容层：它先确认本机签名 Desktop 仍包含经过验证的选择器 gate 与结构锚点，再用仅对该次 Codex 进程生效的主进程加载器，在 renderer 第一段脚本之前注册一个哈希固定的 session preload。它不提取、不修改、不复制客户端，不写 WindowsApps，不开放调试端口，也不写入用户级或机器级环境变量。官方 Desktop 更新后，启动器只有在精确包身份、有效签名者身份、选择器结构、隔离主进程探针和文档起始探针全部通过时，才会自动接受新构建并原子刷新版本与字节固定值；不兼容更新会保留上一次接受的状态并安全拒绝，无需用户为兼容更新重新安装或确认。验收会先故意提供不可用的继承模块路径，在真实 Windows PowerShell 下执行已安装启动器的无副作用校验路径（包括当前进程路由分支），成功后才接受 renderer 探针。安装还必须证明当前用户的启动监视器持续存活；一次接管失败只会被记录，不会让监视器随之退出。
+部分 Windows Desktop 构建仍可能在发送或完成期间显示另一个标签，即使实际路由正确。0.2.0 因此提供独立、可选的兼容层：它先确认本机签名 Desktop 仍包含经过验证的选择器 gate 与结构锚点，再用仅对该次 Codex 进程生效的主进程加载器，在 renderer 第一段脚本之前注册一个哈希固定的 session preload。它不提取、不修改、不复制客户端，不写 WindowsApps，不开放调试端口，也不写入用户级或机器级环境变量。官方 Desktop 更新后，启动器只有在精确包身份、有效签名者身份、选择器结构、隔离主进程探针和文档起始探针全部通过时，才会自动接受新构建并原子刷新版本与字节固定值；不兼容更新会保留上一次接受的状态并安全拒绝，无需用户为兼容更新重新安装或确认。验收会先故意提供不可用的继承模块路径，在真实 Windows PowerShell 下执行已安装启动器的无副作用校验路径（包括当前进程路由分支），成功后才接受 renderer 探针。
+
+该兼容层绝不关闭、强杀或重启任何正在运行的 Codex Desktop 进程。当普通未注入的 Desktop 已经在运行时，启动器只记录 `MANUAL_ACTION_REQUIRED` 并退出；由用户完整退出 Codex 后改用专用快捷方式启动。可选的每用户启动监视器因此是纯观察者：只记录路由状态，从不对运行中的 Desktop 调用启动器。安装会在任何状态变更之前归档并移除可证明指向旧 `desktop-ui-fix` watcher 的自启动项，升级不会再留下开机弹窗。
 
 如果你以前是手动复制 `~/.codex/skills/secure-codex-setup`，而不是通过 marketplace 安装插件，请先把旧目录可恢复地移出技能发现路径，再添加 GitHub marketplace、安装 `codex-safe-setup` 并新建任务。不要让独立旧副本和插件副本同时被发现。
 
@@ -69,7 +71,7 @@ codex plugin add codex-safe-setup@codex-safe-setup
 
 ### 可选的 Windows Desktop 选择器兼容层
 
-只有在直接观察到“没有点击但标签自行变化”时才使用。先预览；正式安装会单独要求确认，因为它依赖未公开的 Desktop 功能 gate、增加一个仅当前 Codex 进程使用的 session preload，并安装当前用户的启动监视器。安装不会重启正在运行的任务：
+只有在直接观察到“没有点击但标签自行变化”时才使用。先预览；正式安装会单独要求确认，因为它依赖未公开的 Desktop 功能 gate，并增加一个仅当前 Codex 进程使用的 session preload。安装不会重启正在运行的任务。启动监视器为可选且纯观察；只有需要登录期路由状态记录时才传 `-EnableStartupWatcher`：
 
 ```powershell
 & <skill-dir>/scripts/Install-DesktopPermissionSelectorFix.ps1 -PlanOnly

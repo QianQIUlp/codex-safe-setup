@@ -380,6 +380,7 @@ unified_exec = true
     & (Join-Path $PSScriptRoot 'Test-DynamicPermissionRouting.ps1')
     & (Join-Path $PSScriptRoot 'Test-DesktopPermissionE2EVerifier.Unit.ps1')
     & (Join-Path $PSScriptRoot 'Test-DesktopPermissionSelectorFix.Unit.ps1')
+    if ($env:OS -eq 'Windows_NT') { & (Join-Path $PSScriptRoot 'Test-DesktopSelectorStartupMigration.Unit.ps1') }
 
     Write-Output 'PASS: configuration migration and preservation'
     Write-Output 'PASS: read-only assessment classification'
@@ -395,6 +396,7 @@ unified_exec = true
     Write-Output 'PASS: versioned upgrade migration and chained rollback'
     Write-Output 'PASS: exact rollback'
     Write-Output 'PASS: fail-closed process-scoped Desktop selector loader lifecycle'
+    if ($env:OS -eq 'Windows_NT') { Write-Output 'PASS: legacy desktop selector autostart migration coverage' }
 }
 finally {
     if (Test-Path -LiteralPath $temporaryRoot) {

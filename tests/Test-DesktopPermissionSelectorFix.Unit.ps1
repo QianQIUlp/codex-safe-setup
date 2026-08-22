@@ -125,6 +125,10 @@ try {
         $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Test-RecordedHash'
     }, $true)
     Assert-True ($null -ne $hashFunctionAst) 'The launcher must define Test-RecordedHash.'
+    $launcherText = [IO.File]::ReadAllText($launcherAssetPath)
+    foreach ($forbiddenToken in @('CloseMainWindow', 'Stop-Process')) {
+        Assert-True (-not $launcherText.Contains($forbiddenToken)) "The fail-closed launcher must never reference '$forbiddenToken'."
+    }
     $hashFixturePath = Join-Path $temporaryRoot 'launcher hash fixture.txt'
     [IO.File]::WriteAllText($hashFixturePath, 'module-independent-hash-probe', [Text.UTF8Encoding]::new($false))
     $expectedFixtureHash = Get-CssFileSha256 -Path $hashFixturePath
@@ -170,30 +174,32 @@ if ((Get-SequenceCount -Value @([pscustomobject]@{ ProcessId = 1 }, [pscustomobj
         param($node)
         $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Write-WatcherStatus'
     }, $true)
-    $watcherRepairFunctionAst = $watcherAst.Find({
+    $watcherObservationFunctionAst = $watcherAst.Find({
         param($node)
-        $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Invoke-SelectorRepair'
+        $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-RoutingObservation'
     }, $true)
-    Assert-True ($null -ne $watcherStatusFunctionAst -and $null -ne $watcherRepairFunctionAst) 'The watcher must expose its repair boundary and health status.'
-    $watcherProbePath = Join-Path $temporaryRoot 'windows-powershell-watcher-probe.ps1'
+    Assert-True ($null -ne $watcherStatusFunctionAst -and $null -ne $watcherObservationFunctionAst) 'The watcher must expose its routing observation and health status.'
+    $watcherText = [IO.File]::ReadAllText($watcherAssetPath)
+    foreach ($forbiddenToken in @('Start-CodexFixed', 'CloseMainWindow', 'Stop-Process', '& $launcher')) {
+        Assert-True (-not $watcherText.Contains($forbiddenToken)) "The observational watcher must never reference '$forbiddenToken'."
+    }
     $watcherStatusFixture = Join-Path $temporaryRoot 'watcher-status-fixture.json'
     $escapedWatcherStatusFixture = $watcherStatusFixture.Replace("'", "''")
+    $watcherProbePath = Join-Path $temporaryRoot 'windows-powershell-watcher-probe.ps1'
     $watcherProbe = @"
 Set-StrictMode -Version Latest
 `$ErrorActionPreference = 'Stop'
 `$state = [pscustomobject]@{ installationId = 'unit-fixture' }
 `$watcherStatusPath = '$escapedWatcherStatusFixture'
 $($watcherStatusFunctionAst.Extent.Text)
-$($watcherRepairFunctionAst.Extent.Text)
-`$continued = Invoke-SelectorRepair -Action { throw 'synthetic launcher failure' }
-if (`$continued) { exit 96 }
+Write-WatcherStatus -Status 'MANUAL_ACTION_REQUIRED' -Message 'synthetic observation'
 `$status = [IO.File]::ReadAllText(`$watcherStatusPath) | ConvertFrom-Json
-if (`$status.status -ne 'REPAIR_FAILED' -or `$status.installationId -ne 'unit-fixture') { exit 97 }
+if (`$status.status -ne 'MANUAL_ACTION_REQUIRED' -or `$status.installationId -ne 'unit-fixture') { exit 96 }
 "@
     [IO.File]::WriteAllText($watcherProbePath, $watcherProbe, [Text.UTF8Encoding]::new($false))
     $watcherProbeOutput = @(& $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $watcherProbePath 2>&1)
     $watcherProbeExitCode = $LASTEXITCODE
-    Assert-True ($watcherProbeExitCode -eq 0) "A failed redirect attempt must be recorded without terminating the startup watcher. exit=$watcherProbeExitCode output=$($watcherProbeOutput -join ' | ')"
+    Assert-True ($watcherProbeExitCode -eq 0) "The watcher must record a manual-action observation without terminating. exit=$watcherProbeExitCode output=$($watcherProbeOutput -join ' | ')"
 
     $unsignedRefused = $false
     try {

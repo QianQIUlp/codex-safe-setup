@@ -214,7 +214,7 @@ try {
             'preserve-current-task'
         }
         elseif ($officialRootCount -gt 0) {
-            'redirect-uninstrumented-process'
+            'manual-action-required'
         }
         else {
             'start-instrumented-process'
@@ -231,22 +231,11 @@ try {
         Write-LaunchStatus -Status 'CURRENT_TASK_PRESERVED' -Message 'The task that was running during migration was left untouched. The lightweight loader activates after that task exits.'
         return
     }
-
-    $officialRoots = @($rootProcesses)
-    foreach ($officialRoot in $officialRoots) {
-        $process = Get-Process -Id $officialRoot.ProcessId -ErrorAction SilentlyContinue
-        if ($null -ne $process) { [void]$process.CloseMainWindow() }
-    }
-    $deadline = (Get-Date).AddSeconds(8)
-    do {
-        $remaining = @($officialRoots | Where-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue })
-        if ((Get-SequenceCount -Value $remaining) -eq 0) { break }
-        Start-Sleep -Milliseconds 200
-    } while ((Get-Date) -lt $deadline)
-    foreach ($officialRoot in $officialRoots) {
-        if (Get-Process -Id $officialRoot.ProcessId -ErrorAction SilentlyContinue) {
-            Stop-Process -Id $officialRoot.ProcessId -Force
-        }
+    if ($officialRootCount -gt 0) {
+        $officialRoots = @($rootProcesses)
+        $processIdsForAudit = @($officialRoots | ForEach-Object { [int]$_.ProcessId })
+        Write-LaunchStatus -Status 'MANUAL_ACTION_REQUIRED' -Message ('An official Codex Desktop process is already running without the selector loader (audit PIDs: ' + ($processIdsForAudit -join ',') + '). Exit Codex completely, then start it again from the Codex (Stable Permissions) shortcut.')
+        throw 'Refusing to close or restart a running official Codex Desktop process (fail-closed).'
     }
 
     $legacyRoot = [string]$state.legacyDerivedRoot

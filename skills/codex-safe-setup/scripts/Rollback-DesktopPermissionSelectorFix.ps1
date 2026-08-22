@@ -52,6 +52,7 @@ Write-Output '- Stop only the recorded loader watcher; never terminate the curre
 Write-Output '- Remove only shortcuts that still point to this loader generation.'
 Write-Output '- Move the active loader and state into recovery history; do not delete them.'
 Write-Output '- Restore the immediately previous loader generation, or the preserved legacy compatibility generation when one existed.'
+Write-Output '- Rollback never recreates startup-watcher autostart entries and never launches a watcher; use the Start Menu shortcut explicitly.'
 if ($PlanOnly) { Write-Output 'No files changed (PlanOnly).'; return }
 if (-not $ConfirmRollback) {
     if ($NonInteractive) { throw 'Non-interactive rollback requires -ConfirmRollback.' }
@@ -92,13 +93,11 @@ if (Test-Path -LiteralPath $destination) {
 Move-Item -LiteralPath $pointerPath -Destination (Join-Path $historyRoot ($rollbackId + '.json'))
 
 function Set-CssRestoredShortcuts {
-    param([string]$Root, $Pointer)
+    param([string]$Root, $Pointer, [switch]$StartMenuOnly)
     if (-not $Root -or -not $Pointer -or -not (Test-Path -LiteralPath $Root -PathType Container)) { return }
     $wscript = Join-Path $env:SystemRoot 'System32\wscript.exe'
     $startProperty = $Pointer.PSObject.Properties['startMenuShortcut']
-    $startupProperty = $Pointer.PSObject.Properties['startupShortcut']
     $startPath = if ($null -ne $startProperty) { [string]$startProperty.Value } else { '' }
-    $startupPath = if ($null -ne $startupProperty) { [string]$startupProperty.Value } else { '' }
     if ($startPath -and (Test-Path -LiteralPath (Join-Path $Root 'Start-CodexFixed.vbs') -PathType Leaf)) {
         $start = $shell.CreateShortcut($startPath)
         $start.TargetPath = $wscript
@@ -106,14 +105,10 @@ function Set-CssRestoredShortcuts {
         $start.WorkingDirectory = $Root
         $start.Save()
     }
-    if ($startupPath -and (Test-Path -LiteralPath (Join-Path $Root 'Watch-CodexDesktop.vbs') -PathType Leaf)) {
-        $watch = $shell.CreateShortcut($startupPath)
-        $watch.TargetPath = $wscript
-        $watch.Arguments = '"' + (Join-Path $Root 'Watch-CodexDesktop.vbs') + '"'
-        $watch.WorkingDirectory = $Root
-        $watch.Save()
-        Start-Process -FilePath $wscript -ArgumentList @('"' + (Join-Path $Root 'Watch-CodexDesktop.vbs') + '"') -WindowStyle Hidden | Out-Null
-    }
+    if ($StartMenuOnly) { return }
+    # Startup-watcher autostart is never recreated by rollback: a stale or
+    # resurrected autostart entry is exactly the failure mode this fix removes.
+    return
 }
 
 if ($previousRoot) {
@@ -130,7 +125,7 @@ elseif ($legacyRoot) {
     if ($null -ne $state.previousPointerState) {
         Write-CssTextAtomic -Path $pointerPath -Text ($state.previousPointerState | ConvertTo-Json -Depth 30)
     }
-    Set-CssRestoredShortcuts -Root $legacyRoot -Pointer $state.previousPointerState
+    Write-Output 'Legacy compatibility generation restored without recreating any autostart entry; its watcher stays disabled.'
 }
 elseif ($null -ne $state.previousPointerState) {
     Write-CssTextAtomic -Path $pointerPath -Text ($state.previousPointerState | ConvertTo-Json -Depth 30)

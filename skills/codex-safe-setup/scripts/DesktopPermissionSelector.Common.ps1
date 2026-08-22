@@ -417,6 +417,101 @@ function Stop-CssDesktopSelectorWatcher {
     return $matches.Count
 }
 
+function Get-CssDesktopSelectorLegacyShortcuts {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$LegacyRoot,
+        [string[]]$StartupDirectories
+    )
+
+    if ($env:OS -ne 'Windows_NT') { return @() }
+    $legacyVbs = [IO.Path]::GetFullPath((Join-Path ([IO.Path]::GetFullPath($LegacyRoot)) 'Watch-CodexDesktop.vbs'))
+    $normalizedNeedle = $legacyVbs.Replace('/', '\').ToLowerInvariant()
+    $folders = if ($StartupDirectories) {
+        @($StartupDirectories | Where-Object { $_ })
+    }
+    else {
+        @(
+            [Environment]::GetFolderPath('Startup'),
+            [Environment]::GetFolderPath('CommonStartup')
+        ) | Where-Object { $_ }
+    }
+    $folders = @($folders | Where-Object { Test-Path -LiteralPath $_ -PathType Container } | Select-Object -Unique)
+    $shell = New-Object -ComObject WScript.Shell
+    $entries = [Collections.Generic.List[object]]::new()
+    foreach ($folder in $folders) {
+        $shortcutFiles = @(Get-ChildItem -LiteralPath $folder -Filter '*.lnk' -File -ErrorAction SilentlyContinue)
+        foreach ($file in $shortcutFiles) {
+            try { $shortcut = $shell.CreateShortcut($file.FullName) } catch { continue }
+            $target = [string]$shortcut.TargetPath
+            if (-not $target) { continue }
+            $targetName = [IO.Path]::GetFileName($target)
+            if (-not $targetName.Equals('wscript.exe', [StringComparison]::OrdinalIgnoreCase)) { continue }
+            $flatArguments = ([string]$shortcut.Arguments).Replace('"', '').Replace('/', '\').ToLowerInvariant()
+            if (-not $flatArguments.Contains($normalizedNeedle)) { continue }
+            $entries.Add([pscustomobject]@{
+                Path = $file.FullName
+                TargetPath = $target
+                Arguments = [string]$shortcut.Arguments
+                WorkingDirectory = [string]$shortcut.WorkingDirectory
+                Description = [string]$shortcut.Description
+                CreationTimeUtc = $file.CreationTimeUtc.ToString('o')
+                LastWriteTimeUtc = $file.LastWriteTimeUtc.ToString('o')
+            })
+        }
+    }
+    return @($entries)
+}
+
+function Protect-CssDesktopSelectorLegacyShortcutArchive {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$Entry,
+        [Parameter(Mandatory)][string]$HistoryRoot,
+        [Parameter(Mandatory)][string]$TimestampUtc
+    )
+
+    $archiveDir = Join-Path ([IO.Path]::GetFullPath($HistoryRoot)) ($TimestampUtc + '-legacy-autostart')
+    New-Item -ItemType Directory -Path $archiveDir -Force | Out-Null
+    $sourceItem = Get-Item -LiteralPath ([string]$Entry.Path) -Force
+    Copy-Item -LiteralPath $sourceItem.FullName -Destination (Join-Path $archiveDir $sourceItem.Name) -Force
+    $metadata = [ordered]@{
+        archivedUtc = (Get-Date).ToUniversalTime().ToString('o')
+        originalPath = [string]$Entry.Path
+        targetPath = [string]$Entry.TargetPath
+        arguments = [string]$Entry.Arguments
+        workingDirectory = [string]$Entry.WorkingDirectory
+        description = [string]$Entry.Description
+        creationTimeUtc = [string]$Entry.CreationTimeUtc
+        lastWriteTimeUtc = [string]$Entry.LastWriteTimeUtc
+        sha256 = (Get-CssFileSha256 -Path $sourceItem.FullName)
+    }
+    [IO.File]::WriteAllText(
+        (Join-Path $archiveDir ($sourceItem.BaseName + '.metadata.json')),
+        ($metadata | ConvertTo-Json -Depth 6),
+        [Text.UTF8Encoding]::new($false)
+    )
+    return $archiveDir
+}
+
+function Remove-CssDesktopSelectorLegacyShortcuts {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$LegacyRoot,
+        [Parameter(Mandatory)][string]$HistoryRoot,
+        [string[]]$StartupDirectories
+    )
+
+    $timestampUtc = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssfffZ')
+    $removed = [Collections.Generic.List[string]]::new()
+    foreach ($entry in @(Get-CssDesktopSelectorLegacyShortcuts -LegacyRoot $LegacyRoot -StartupDirectories $StartupDirectories)) {
+        Protect-CssDesktopSelectorLegacyShortcutArchive -Entry $entry -HistoryRoot $HistoryRoot -TimestampUtc $timestampUtc | Out-Null
+        Remove-Item -LiteralPath ([string]$entry.Path) -Force -ErrorAction Stop
+        $removed.Add([string]$entry.Path)
+    }
+    return @($removed)
+}
+
 function Invoke-CssDesktopSelectorNodeOptionsProbe {
     [CmdletBinding()]
     param(

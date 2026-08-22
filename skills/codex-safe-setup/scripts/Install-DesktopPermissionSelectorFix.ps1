@@ -7,6 +7,7 @@ param(
     [string]$InstallLocation,
     [string]$PackageVersion,
     [switch]$SkipShortcuts,
+    [switch]$EnableStartupWatcher,
     [Parameter(DontShow)][switch]$AllowUnsignedTestFixture,
     [switch]$PlanOnly,
     [switch]$ConfirmApply,
@@ -93,8 +94,16 @@ Write-Output '- Preserve existing Electron session preloads and any pre-existing
 Write-Output '- Do not modify or redistribute any file under the signed WindowsApps package, any ASAR, renderer bundle, executable, or DLL.'
 Write-Output '- A later official Desktop update is accepted automatically only after identity, signature, selector-structure, main-process, and document-start probes pass; incompatible updates fail closed without changing the prior pins.'
 if (-not $SkipShortcuts) {
-    Write-Output '- Add a dedicated Start Menu shortcut and a per-user startup watcher. The task running during installation is explicitly exempt from redirection until it exits.'
+    Write-Output '- Add a dedicated Start Menu shortcut that launches the instrumented Desktop explicitly.'
+    if ($EnableStartupWatcher) {
+        Write-Output '- Add a per-user startup watcher (opt-in). The watcher only records routing status; it never closes or restarts a running Desktop.'
+    }
+    else {
+        Write-Output '- The startup watcher is disabled by default. Ordinary Desktop launches are left untouched (fail-closed); use the Start Menu shortcut for the instrumented session.'
+    }
+    Write-Output '- The task running during installation is explicitly exempt from redirection until it exits.'
 }
+Write-Output '- Remove only autostart entries that provably point at the legacy desktop-ui-fix watcher before any state changes; all unrelated entries are preserved and every removal is archived in recovery history.'
 Write-Output '- Preserve any previous loader generation and any legacy derived client copy in recoverable history.'
 
 if ($PlanOnly) {
@@ -129,6 +138,14 @@ $pointerWritten = $false
 $shortcutsWritten = [Collections.Generic.List[string]]::new()
 
 try {
+    $legacyStartupRemoved = @()
+    if ($legacyRoot -and -not $legacyRoot.Equals($resolvedDestination, [StringComparison]::OrdinalIgnoreCase)) {
+        $legacyStartupRemoved = @(Remove-CssDesktopSelectorLegacyShortcuts -LegacyRoot $legacyRoot -HistoryRoot $historyRoot)
+        foreach ($removedPath in $legacyStartupRemoved) {
+            Write-Output "Archived and removed legacy autostart entry: $removedPath"
+        }
+    }
+
     New-Item -ItemType Directory -Path $stagingRoot -Force | Out-Null
     foreach ($assetName in $assetSources.Keys) {
         Copy-Item -LiteralPath $assetSources[$assetName] -Destination (Join-Path $stagingRoot $assetName) -Force
@@ -151,6 +168,28 @@ try {
         $previousDestination = [IO.Path]::GetFullPath([string]$previousPointer.destinationRoot)
         if (Test-CssPathWithin -Path $previousDestination -Root $resolvedCodexHome) {
             [void](Stop-CssDesktopSelectorWatcher -DestinationRoot $previousDestination)
+        }
+        $previousStartupShortcutProperty = $previousPointer.PSObject.Properties['startupShortcut']
+        $previousStartupShortcut = if ($null -ne $previousStartupShortcutProperty) { [string]$previousStartupShortcutProperty.Value } else { '' }
+        if ($previousStartupShortcut -and -not $EnableStartupWatcher -and (Test-Path -LiteralPath $previousStartupShortcut -PathType Leaf)) {
+            $shellForRetire = New-Object -ComObject WScript.Shell
+            $retiringShortcut = $shellForRetire.CreateShortcut($previousStartupShortcut)
+            $retiredArguments = ([string]$retiringShortcut.Arguments).Replace('"', '').Replace('/', '\').ToLowerInvariant()
+            $expectedPreviousWatcher = (Join-Path $previousDestination 'Watch-CodexDesktop.vbs').Replace('/', '\').ToLowerInvariant()
+            if ($retiredArguments.Contains($expectedPreviousWatcher)) {
+                New-Item -ItemType Directory -Path $historyRoot -Force | Out-Null
+                Protect-CssDesktopSelectorLegacyShortcutArchive -Entry ([pscustomobject]@{
+                    Path = $previousStartupShortcut
+                    TargetPath = [string]$retiringShortcut.TargetPath
+                    Arguments = [string]$retiringShortcut.Arguments
+                    WorkingDirectory = [string]$retiringShortcut.WorkingDirectory
+                    Description = [string]$retiringShortcut.Description
+                    CreationTimeUtc = (Get-Item -LiteralPath $previousStartupShortcut).CreationTimeUtc.ToString('o')
+                    LastWriteTimeUtc = (Get-Item -LiteralPath $previousStartupShortcut).LastWriteTimeUtc.ToString('o')
+                }) -HistoryRoot $historyRoot -TimestampUtc $installationTimestamp | Out-Null
+                Remove-Item -LiteralPath $previousStartupShortcut -Force
+                Write-Output "Retired the previous generation startup watcher entry: $previousStartupShortcut"
+            }
         }
     }
     if ($legacyPresent) { [void](Stop-CssDesktopSelectorWatcher -DestinationRoot $legacyRoot) }
@@ -211,6 +250,8 @@ try {
         recertificationCount = 0
         lastRecertifiedUtc = $null
         graceProcesses = $graceProcesses
+        startupWatcherEnabled = [bool]$EnableStartupWatcher
+        legacyStartupEntriesRemoved = @($legacyStartupRemoved)
         legacyDerivedRoot = $legacyRoot
         legacyDerivedAppDirectory = $legacyAppDirectory
         legacyArchivePath = $legacyArchivePath
@@ -227,19 +268,21 @@ try {
         $wscript = Join-Path $env:SystemRoot 'System32\wscript.exe'
         $shell = New-Object -ComObject WScript.Shell
         $startMenuShortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'Codex (Stable Permissions).lnk'
-        $startupShortcut = Join-Path ([Environment]::GetFolderPath('Startup')) 'Codex Safe Setup Desktop Selector.lnk'
         $start = $shell.CreateShortcut($startMenuShortcut)
         $start.TargetPath = $wscript
         $start.Arguments = '"' + (Join-Path $resolvedDestination 'Start-CodexFixed.vbs') + '"'
         $start.WorkingDirectory = $resolvedDestination
         $start.Save()
         $shortcutsWritten.Add($startMenuShortcut)
-        $watch = $shell.CreateShortcut($startupShortcut)
-        $watch.TargetPath = $wscript
-        $watch.Arguments = '"' + (Join-Path $resolvedDestination 'Watch-CodexDesktop.vbs') + '"'
-        $watch.WorkingDirectory = $resolvedDestination
-        $watch.Save()
-        $shortcutsWritten.Add($startupShortcut)
+        if ($EnableStartupWatcher) {
+            $startupShortcut = Join-Path ([Environment]::GetFolderPath('Startup')) 'Codex Safe Setup Desktop Selector.lnk'
+            $watch = $shell.CreateShortcut($startupShortcut)
+            $watch.TargetPath = $wscript
+            $watch.Arguments = '"' + (Join-Path $resolvedDestination 'Watch-CodexDesktop.vbs') + '"'
+            $watch.WorkingDirectory = $resolvedDestination
+            $watch.Save()
+            $shortcutsWritten.Add($startupShortcut)
+        }
     }
 
     $pointerState = [ordered]@{
@@ -267,6 +310,8 @@ try {
         lastRecertifiedUtc = $null
         startMenuShortcut = $startMenuShortcut
         startupShortcut = $startupShortcut
+        startupWatcherEnabled = [bool]$EnableStartupWatcher
+        legacyStartupEntriesRemoved = @($legacyStartupRemoved)
         legacyDerivedRoot = $legacyRoot
         legacyArchivePath = $legacyArchivePath
         previousRoot = $previousRoot
@@ -275,7 +320,7 @@ try {
     Write-CssTextAtomic -Path $pointerPath -Text ($pointerState | ConvertTo-Json -Depth 30)
     $pointerWritten = $true
 
-    if (-not $SkipShortcuts) {
+    if ($EnableStartupWatcher -and -not $SkipShortcuts) {
         $wscript = Join-Path $env:SystemRoot 'System32\wscript.exe'
         Start-Process -FilePath $wscript -ArgumentList @('"' + (Join-Path $resolvedDestination 'Watch-CodexDesktop.vbs') + '"') -WindowStyle Hidden | Out-Null
         $watcherPidPath = Join-Path $resolvedDestination 'watcher.pid.json'
@@ -297,6 +342,12 @@ try {
         }
     }
     Write-Output "Installed and verified lightweight Desktop selector loader: $resolvedDestination"
+    if (@($legacyStartupRemoved).Length -gt 0) {
+        Write-Output "Legacy autostart entries archived and removed: $(@($legacyStartupRemoved).Length)"
+    }
+    if (-not $EnableStartupWatcher -and -not $SkipShortcuts) {
+        Write-Output 'Startup watcher is disabled by default. Ordinary Desktop launches are never closed or redirected; use the Codex (Stable Permissions) shortcut for the instrumented session.'
+    }
     if (@($graceProcesses).Length -gt 0) {
         Write-Output 'The currently running Desktop task was preserved. The process-scoped loader activates automatically after that task exits and Desktop is launched again.'
     }
