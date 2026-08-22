@@ -15,14 +15,7 @@ $legacySkillPath = Join-Path $legacySkillRoot 'SKILL.md'
 $upgradeScriptPath = Join-Path $skillRoot 'scripts/Upgrade-CodexSafety.ps1'
 $desktopE2eScriptPath = Join-Path $skillRoot 'scripts/Test-DesktopPermissionE2E.ps1'
 $desktopE2eWrapperPath = Join-Path $repositoryRoot 'tests/Test-DesktopPermissionE2E.ps1'
-$desktopSelectorInstallPath = Join-Path $skillRoot 'scripts/Install-DesktopPermissionSelectorFix.ps1'
-$desktopSelectorTestPath = Join-Path $skillRoot 'scripts/Test-DesktopPermissionSelectorFix.ps1'
-$desktopSelectorRollbackPath = Join-Path $skillRoot 'scripts/Rollback-DesktopPermissionSelectorFix.ps1'
-$desktopSelectorCommonPath = Join-Path $skillRoot 'scripts/DesktopPermissionSelector.Common.ps1'
-$desktopSelectorAssetRoot = Join-Path $skillRoot 'assets/desktop-permission-selector'
-$desktopSelectorLoaderPath = Join-Path $desktopSelectorAssetRoot 'permission-selector-loader.cjs'
-$desktopSelectorPreloadPath = Join-Path $desktopSelectorAssetRoot 'permission-selector-preload.cjs'
-$desktopSelectorRecertifierPath = Join-Path $desktopSelectorAssetRoot 'Recertify-CodexDesktop.ps1'
+$legacyCleanupScriptPath = Join-Path $skillRoot 'scripts/Remove-LegacyDesktopSelectorArtifacts.ps1'
 $installScriptPath = Join-Path $skillRoot 'scripts/Install-CodexSafety.ps1'
 $assessScriptPath = Join-Path $skillRoot 'scripts/Assess-CodexSafety.ps1'
 $testScriptPath = Join-Path $skillRoot 'scripts/Test-CodexSafety.ps1'
@@ -46,17 +39,7 @@ $requiredFiles = @(
     $upgradeScriptPath,
     $desktopE2eScriptPath,
     $desktopE2eWrapperPath,
-    $desktopSelectorInstallPath,
-    $desktopSelectorTestPath,
-    $desktopSelectorRollbackPath,
-    $desktopSelectorCommonPath,
-    $desktopSelectorLoaderPath,
-    $desktopSelectorPreloadPath,
-    $desktopSelectorRecertifierPath,
-    (Join-Path $desktopSelectorAssetRoot 'Start-CodexFixed.ps1'),
-    (Join-Path $desktopSelectorAssetRoot 'Start-CodexFixed.vbs'),
-    (Join-Path $desktopSelectorAssetRoot 'Watch-CodexDesktop.ps1'),
-    (Join-Path $desktopSelectorAssetRoot 'Watch-CodexDesktop.vbs'),
+    $legacyCleanupScriptPath,
     $installScriptPath,
     $assessScriptPath,
     $testScriptPath,
@@ -104,7 +87,7 @@ foreach ($entry in $utf8Sentinels.GetEnumerator()) {
 $manifestText = [IO.File]::ReadAllText($manifestPath)
 $manifest = $manifestText | ConvertFrom-Json
 Assert-True ($manifest.name -eq 'codex-safe-setup') 'Plugin name must remain codex-safe-setup.'
-Assert-True ($manifest.version -eq '0.2.0') 'Release package must use version 0.2.0.'
+Assert-True ($manifest.version -eq '0.2.1') 'Release package must use version 0.2.1.'
 Assert-True ($manifest.version -match '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$') 'Plugin version must be strict semver.'
 Assert-True (-not [string]::IsNullOrWhiteSpace($manifest.description)) 'Plugin description is required.'
 Assert-True (-not [string]::IsNullOrWhiteSpace($manifest.author.name)) 'Plugin author name is required.'
@@ -146,9 +129,8 @@ Assert-True ($skillText -match 'workspace credential files remain readable') 'Sk
 Assert-True ($skillText -match 'StrictProfile') 'Skill must retain the strict deny-read alternative.'
 Assert-True ($skillText -match 'Full Access.*danger-full-access') 'Skill must require Full Access to produce the effective danger-full-access sandbox.'
 Assert-True ($skillText -match 'Test-DesktopPermissionE2E') 'Skill must require the real Desktop turn/canary verifier.'
-Assert-True ($skillText -match 'Install-DesktopPermissionSelectorFix' -and $skillText -match 'AcknowledgeUnsupportedDesktopOverride') 'Skill must disclose and explicitly acknowledge the optional Desktop compatibility layer.'
+Assert-True ($skillText -notmatch 'AcknowledgeUnsupportedDesktopOverride|Install-DesktopPermissionSelectorFix') 'Skill must not offer the removed Desktop compatibility layer.'
 Assert-True ($skillText -match 'must never modify WindowsApps or package any OpenAI executable, ASAR, renderer bundle') 'Skill must prohibit client modification and redistribution.'
-Assert-True ($skillText -match 'compatible updates need no reinstall' -and $skillText -match 'incompatible updates preserve the prior pins and fail closed') 'Skill must require automatic compatible-update recertification and incompatible-update refusal.'
 Assert-True ($skillText -match 'Rollout records cannot prove what the selector displayed') 'Skill must separate visual stability from runtime permission evidence.'
 Assert-True ($skillText -match 'codexsandboxonline.*codexsandboxoffline') 'Skill must reject sandbox account names as permission evidence.'
 Assert-True ($skillText -match 'native Git') 'Skill must preserve ordinary Git in a true Full Access task.'
@@ -181,32 +163,42 @@ Assert-True ($desktopE2eScriptText -match 'VisualStabilityConfirmed' -and $deskt
 $desktopE2eWrapperText = [IO.File]::ReadAllText($desktopE2eWrapperPath)
 Assert-True ($desktopE2eWrapperText -match 'skills\\codex-safe-setup\\scripts\\Test-DesktopPermissionE2E\.ps1') 'Repository E2E wrapper must invoke the packaged canonical verifier.'
 
-$desktopSelectorInstallText = [IO.File]::ReadAllText($desktopSelectorInstallPath)
-$desktopSelectorCommonText = [IO.File]::ReadAllText($desktopSelectorCommonPath)
-$desktopSelectorTestText = [IO.File]::ReadAllText($desktopSelectorTestPath)
-$desktopSelectorRollbackText = [IO.File]::ReadAllText($desktopSelectorRollbackPath)
-$desktopSelectorLauncherText = [IO.File]::ReadAllText((Join-Path $desktopSelectorAssetRoot 'Start-CodexFixed.ps1'))
-$desktopSelectorWatcherText = [IO.File]::ReadAllText((Join-Path $desktopSelectorAssetRoot 'Watch-CodexDesktop.ps1'))
-$desktopSelectorLauncherVbsText = [IO.File]::ReadAllText((Join-Path $desktopSelectorAssetRoot 'Start-CodexFixed.vbs'))
-$desktopSelectorWatcherVbsText = [IO.File]::ReadAllText((Join-Path $desktopSelectorAssetRoot 'Watch-CodexDesktop.vbs'))
-$desktopSelectorLoaderText = [IO.File]::ReadAllText($desktopSelectorLoaderPath)
-$desktopSelectorPreloadText = [IO.File]::ReadAllText($desktopSelectorPreloadPath)
-$desktopSelectorRecertifierText = [IO.File]::ReadAllText($desktopSelectorRecertifierPath)
-Assert-True ($desktopSelectorInstallText -match 'AcknowledgeUnsupportedDesktopOverride' -and $desktopSelectorInstallText -match 'PlanOnly' -and $desktopSelectorInstallText -match 'ConfirmApply') 'Desktop compatibility installation must be plan-first and separately acknowledged.'
-Assert-True ($desktopSelectorInstallText -match 'Do not modify or redistribute any file under the signed WindowsApps package') 'Desktop compatibility plan must disclose its client boundary.'
-Assert-True ($desktopSelectorInstallText -match 'AllowUnsignedTestFixture' -and $desktopSelectorInstallText -match 'GetTempPath' -and $desktopSelectorInstallText -match 'SkipShortcuts') 'Unsigned Desktop fixtures must be limited to temporary-path unit tests with no shortcuts.'
-Assert-True ($desktopSelectorCommonText -match 'Find-CssAsarText' -and $desktopSelectorCommonText -match 'Get-CssNodeRequirePath' -and $desktopSelectorCommonText -match 'PROBE_PASS' -and $desktopSelectorCommonText -match 'CssDesktopSelectorStructureAnchors') 'Desktop compatibility common code must pin the shipped selector gate and structure and prove the process-scoped loader hook.'
-Assert-True ($desktopSelectorInstallText -match 'ProcessScopedSessionPreload' -and $desktopSelectorInstallText -match 'no Desktop application copy is created') 'Desktop compatibility installer must use the lightweight process-scoped route and prohibit a derived client copy.'
-Assert-True ($desktopSelectorTestText -match 'Signed source pins' -and $desktopSelectorTestText -match 'Document-start renderer probe' -and $desktopSelectorTestText -match 'No client derivative' -and $desktopSelectorTestText -match 'Live startup watcher') 'Desktop compatibility verifier must check source pins, document-start behavior, the live startup watcher, and absence of a client copy.'
-Assert-True ($desktopSelectorRollbackText -match 'desktop-selector-fix-history' -and $desktopSelectorRollbackText -match 'shortcut\.Arguments' -and $desktopSelectorRollbackText -match 'IndexOf\(\$expected') 'Desktop compatibility rollback must preserve history and target-lock shortcuts.'
-Assert-True ($desktopSelectorLauncherText.IndexOf('sourcePackageVersion', [StringComparison]::Ordinal) -lt $desktopSelectorLauncherText.IndexOf('$officialRoots', [StringComparison]::Ordinal) -and $desktopSelectorLauncherText.IndexOf('sourceExecutableSha256', [StringComparison]::Ordinal) -lt $desktopSelectorLauncherText.IndexOf('$officialRoots', [StringComparison]::Ordinal) -and $desktopSelectorLauncherText.IndexOf('trustedSignerThumbprint', [StringComparison]::Ordinal) -lt $desktopSelectorLauncherText.IndexOf('$officialRoots', [StringComparison]::Ordinal) -and $desktopSelectorLauncherText -notmatch '\bGet-AuthenticodeSignature\b') 'Launcher must validate the package version, exact signature-checked executable bytes, and recorded signer pin before identifying or closing official processes without depending on a lazily loaded security module.'
-Assert-True ($desktopSelectorLauncherText -match 'Recertify-CodexDesktop\.ps1' -and $desktopSelectorLauncherText -match '\$buildChanged' -and $desktopSelectorLauncherText -match 'sourcePackageFamilyName') 'Launcher must route changed official builds through automatic compatibility recertification before process routing.'
-Assert-True ($desktopSelectorRecertifierText -match 'Get-AuthenticodeSignature' -and $desktopSelectorRecertifierText -match 'sourcePackageFamilyName' -and $desktopSelectorRecertifierText -match 'Invoke-CssDesktopSelectorNodeOptionsProbe' -and $desktopSelectorRecertifierText -match 'Invoke-CssRendererPreloadProbe' -and $desktopSelectorRecertifierText -match 'Write-CssFileTextAtomic' -and $desktopSelectorRecertifierText -match 'REJECTED') 'Automatic update recertification must verify signature, exact package identity, both isolated probes, atomic state refresh, and fail-closed refusal.'
-Assert-True ($desktopSelectorLauncherText -notmatch 'ConvertFrom-Json\s+-Depth' -and $desktopSelectorWatcherText -notmatch 'ConvertFrom-Json\s+-Depth') 'Windows PowerShell 5.1 launcher assets must not use the PowerShell 7-only ConvertFrom-Json -Depth parameter.'
-Assert-True ($desktopSelectorLauncherText -notmatch '\bGet-FileHash\b' -and $desktopSelectorLauncherText -match 'Security\.Cryptography\.SHA256.*Create' -and $desktopSelectorLauncherText -match 'ValidateOnly' -and $desktopSelectorLauncherText -match 'WindowsPowerShell\\v1\.0\\Modules' -and $desktopSelectorWatcherText -match 'WindowsPowerShell\\v1\.0\\Modules' -and $desktopSelectorLauncherVbsText -match 'System32\\WindowsPowerShell\\v1\.0\\powershell\.exe' -and $desktopSelectorLauncherVbsText -match 'ValidateOnly' -and $desktopSelectorWatcherVbsText -match 'System32\\WindowsPowerShell\\v1\.0\\powershell\.exe' -and $desktopSelectorTestText -match 'Real hidden Windows launch-chain validation' -and $desktopSelectorTestText -match 'codex-safe-setup-intentionally-missing-modules') 'The exact hidden WScript-to-Windows-PowerShell launch chain must validate through module-independent hashing and a restored built-in module path before runtime probes can pass.'
-Assert-True ($desktopSelectorLauncherText -match 'Get-SequenceCount' -and $desktopSelectorLauncherText.IndexOf('ValidateOnly', [StringComparison]::Ordinal) -lt $desktopSelectorLauncherText.IndexOf('prospectiveRoute', [StringComparison]::Ordinal) -and $desktopSelectorWatcherText -match 'REPAIR_FAILED' -and $desktopSelectorWatcherText -match 'Invoke-SelectorRepair' -and $desktopSelectorInstallText -match 'watcherReady') 'The hidden validation must traverse live process routing, scalar query results must be normalized, redirect failures must not terminate the watcher, and installation must prove watcher liveness.'
-Assert-True ($desktopSelectorLoaderText -match 'session\.defaultSession\.setPreloads' -and $desktopSelectorLoaderText -match 'CSS_DESKTOP_SELECTOR_PRELOAD_SHA256' -and (Get-Item -LiteralPath $desktopSelectorLoaderPath).Length -lt 50000) 'Packaged main-process loader must install and hash-pin only the small session preload.'
-Assert-True ($desktopSelectorPreloadText -match 'executeInMainWorld' -and $desktopSelectorPreloadText -match '4226282475' -and (Get-Item -LiteralPath $desktopSelectorPreloadPath).Length -lt 50000) 'Packaged renderer preload must synchronously install the small project-owned gate override.'
+$removedCompatPaths = @(
+    (Join-Path $skillRoot 'scripts/Install-DesktopPermissionSelectorFix.ps1'),
+    (Join-Path $skillRoot 'scripts/Test-DesktopPermissionSelectorFix.ps1'),
+    (Join-Path $skillRoot 'scripts/Rollback-DesktopPermissionSelectorFix.ps1'),
+    (Join-Path $skillRoot 'scripts/DesktopPermissionSelector.Common.ps1'),
+    (Join-Path $skillRoot 'assets/desktop-permission-selector')
+)
+foreach ($removedPath in $removedCompatPaths) {
+    Assert-True (-not (Test-Path -LiteralPath $removedPath)) ("Removed Desktop compatibility source must stay absent: {0}" -f $removedPath)
+}
+
+$legacyCleanupText = [IO.File]::ReadAllText($legacyCleanupScriptPath)
+Assert-True ($legacyCleanupText -match 'PlanOnly' -and $legacyCleanupText -match 'ConfirmApply') 'Legacy cleanup must be plan-first and require explicit confirmation.'
+Assert-True ($legacyCleanupText -match 'Watch-CodexDesktop\.vbs|desktop-ui-fix|desktop-selector-loader') 'Legacy cleanup must target only the known retired artifact names.'
+Assert-True ($legacyCleanupText -notmatch 'Stop-Process|CloseMainWindow|\bkill\b') 'Legacy cleanup must never close, kill, or restart any process.'
+Assert-True ($legacyCleanupText -notmatch ('app\.asar|STATSIG|setPre' + 'loads|NODE_OPTIONS')) 'Legacy cleanup must not read client internals or set launcher environment overrides.'
+
+$trackedFiles = @(git -C $repositoryRoot ls-files)
+$scanExtensions = @('.ps1', '.md', '.json', '.cjs', '.ts', '.astro', '.yaml', '.yml', '.vbs')
+$overrideScanFiles = @($trackedFiles | Where-Object {
+    $_ -notlike 'dist/*' -and
+    [IO.Path]::GetExtension($_) -in $scanExtensions
+} | ForEach-Object { Join-Path $repositoryRoot $_ })
+$forbiddenOverrideTokens = @(
+    ('42262824' + '75'),
+    ('__STAT' + 'SIG__'),
+    ('executeInMain' + 'World'),
+    ('setPre' + 'loads')
+)
+foreach ($file in $overrideScanFiles) {
+    $text = [IO.File]::ReadAllText($file)
+    foreach ($token in $forbiddenOverrideTokens) {
+        Assert-True (-not $text.Contains($token)) ("Forbidden Desktop-override token '{0}' found in {1}" -f $token, (Split-Path -Leaf $file))
+    }
+}
+Assert-True ($overrideScanFiles.Count -gt 0) 'Override-token scan must cover tracked text sources.'
 
 $forbiddenClientFiles = @(Get-ChildItem -LiteralPath $skillRoot -Recurse -File | Where-Object {
     $_.Extension -in @('.asar', '.msix', '.msixbundle', '.exe', '.dll', '.node') -or
@@ -237,5 +229,5 @@ Write-Output 'PASS: Git-backed marketplace metadata'
 Write-Output 'PASS: canonical skill, compatibility alias, and UI metadata'
 Write-Output 'PASS: unrestricted-network disclosure and task-level Full Access override contract'
 Write-Output 'PASS: required community and security documentation'
-Write-Output 'PASS: fail-closed process-scoped Desktop compatibility boundary with no modified or redistributed client files'
+Write-Output 'PASS: Desktop compatibility layer fully removed and override tokens absent from every tracked source'
 Write-Output ("PASS: PowerShell syntax ({0} files)" -f $powerShellFiles.Count)

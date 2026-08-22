@@ -2,6 +2,21 @@
 
 All notable changes are documented here. Releases follow semantic versioning.
 
+## 0.2.1 - 2026-08-22
+
+### Removed
+
+- Delete the optional Windows Desktop selector compatibility layer introduced in 0.2.0: the process-scoped main loader, session preload, launcher, startup watcher, recertifier, their assets, scripts, and tests, and every documentation or manifest reference to them. Overriding undocumented Desktop internals conflicts with the OpenAI Terms of Use and breaks on client updates; Desktop display defects are now observed and reported upstream instead.
+- Stop shipping the `desktop-selector-fix.json` / `desktop-selector-fix-history` schema-3 state chain.
+
+### Added
+
+- Add `Remove-LegacyDesktopSelectorArtifacts.ps1`: a plan-first cleanup that archives and deletes only exact-match retired autostart shortcuts, removes listed user-scope `CSS_DESKTOP_SELECTOR_*` environment variables, and moves retired state folders into `safe-setup/legacy-selector-quarantine/`. It never starts, stops, closes, or inspects any process and never touches the signed official client.
+
+### Changed
+
+- Package validation now fails when any tracked source contains the retired gate override tokens, guaranteeing the compatibility layer cannot silently return in a future release.
+
 ## 0.2.0 - 2026-08-20
 
 - Preserve the verified runtime rule that the last deliberate selector click governs the next turn. DynamicUi uses built-in Workspace as its startup default plus two positive-only named profiles, with no sticky filesystem deny entries.

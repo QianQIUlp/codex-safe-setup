@@ -56,7 +56,7 @@ Version 0.1.6 adds two explicit routes. `DynamicUi` is the default: it removes t
 
 Version 0.2.0 preserves the runtime rule verified during the 0.1.7-0.1.9 development cycle: the last option deliberately clicked governs the next turn. DynamicUi uses built-in Workspace as the startup default and exposes two positive-only named choices, `codex-safe-workspace` and `codex-safe-workspace-offline`; it never adds a sticky filesystem deny to these dynamic choices.
 
-Some Windows Desktop builds can still render a different selector label while a turn is sent or completed even though runtime routing is correct. Version 0.2.0 therefore includes a separate, optional compatibility layer. It verifies that the installed signed Desktop still contains the tested selector gate and selector structure, then launches that original executable with a process-scoped main loader that registers one hash-pinned session preload before the first renderer script. It does not extract, patch, or copy the client, modify WindowsApps, open a debugging port, or persist a user/machine environment variable. After an official Desktop update, the launcher automatically accepts the new build only when the exact package identity, valid signer identity, selector structure, isolated main-process probe, and document-start probe all pass; it then atomically refreshes the version and byte pins. An incompatible update fails closed without replacing the last accepted state. Its verifier runs the installed non-mutating launch-validation path—including live process-routing discovery—under real Windows PowerShell with an intentionally unusable inherited module path before accepting the renderer probes. Installation also requires the per-user watcher to remain alive; a failed redirect is recorded without terminating that watcher.
+Some Windows Desktop builds could render a different selector label while a turn is sent or completed even though runtime routing is correct. Version 0.2.0 shipped an optional compatibility layer for this; version 0.2.1 removes it entirely. The layer depended on an undocumented Desktop feature gate and process-level launch redirection, which conflicts with the OpenAI Terms of Use and breaks on every client update. The project now treats Desktop display defects as upstream issues to observe, document, and report—not to patch. If you installed the 0.2.0 layer, run the cleanup script below; it removes every retired artifact without touching the signed client.
 
 If you manually copied the old standalone `~/.codex/skills/secure-codex-setup` folder instead of installing the marketplace plugin, move that folder to a recoverable backup outside skill discovery, add the GitHub marketplace, install `codex-safe-setup`, and start a new task. Keeping the standalone copy discoverable would expose two independently versioned skills.
 
@@ -71,24 +71,16 @@ codex plugin add codex-safe-setup@codex-safe-setup
 
 Each release includes a `.sha256` file. Verify the downloaded archive on PowerShell with `Get-FileHash -Algorithm SHA256 <archive>`.
 
-### Optional Windows Desktop selector compatibility
+### Cleaning up legacy Desktop selector installations
 
-Use this only when direct observation shows the label changing without a click. Preview first; installation requires separate acknowledgement because it relies on an undocumented Desktop feature gate, adds a process-scoped session preload, and installs a per-user startup watcher. The task running during installation is never restarted:
-
-```powershell
-& <skill-dir>/scripts/Install-DesktopPermissionSelectorFix.ps1 -PlanOnly
-& <skill-dir>/scripts/Install-DesktopPermissionSelectorFix.ps1 -ConfirmApply -AcknowledgeUnsupportedDesktopOverride
-& <skill-dir>/scripts/Test-DesktopPermissionSelectorFix.ps1
-```
-
-Compatible official client updates require no reinstall or manual re-approval. If the selector gate, structural anchors, package identity, signing identity, or Electron preload behavior changes incompatibly, launch remains disabled and the prior accepted pins remain intact until the compatibility layer itself is updated.
-
-Rollback is recoverable and preserves deactivated loader generations—and any migrated legacy derived copy—under `CODEX_HOME/safe-setup/desktop-selector-fix-history`:
+If you previously installed the removed compatibility layer, preview and apply the cleanup:
 
 ```powershell
-& <skill-dir>/scripts/Rollback-DesktopPermissionSelectorFix.ps1 -PlanOnly
-& <skill-dir>/scripts/Rollback-DesktopPermissionSelectorFix.ps1 -ConfirmRollback
+& <skill-dir>/scripts/Remove-LegacyDesktopSelectorArtifacts.ps1 -PlanOnly
+& <skill-dir>/scripts/Remove-LegacyDesktopSelectorArtifacts.ps1 -ConfirmApply
 ```
+
+The cleanup matches only exact retired artifact names (`Watch-CodexDesktop.vbs`, `desktop-ui-fix`, `desktop-selector-loader`, `CSS_DESKTOP_SELECTOR_*` user environment variables), archives every shortcut before deleting it, quarantines retired state under `CODEX_HOME/safe-setup/legacy-selector-quarantine/`, and never starts, stops, or restarts any process.
 
 ## What the setup asks you to choose
 

@@ -52,7 +52,7 @@ codex plugin add codex-safe-setup@codex-safe-setup
 
 0.2.0 保留了 0.1.7–0.1.9 开发阶段已经验证的运行时规则：下一轮实际权限由最后一次手动点击决定。DynamicUi 只把内建 Workspace 作为启动默认值，并提供两个纯正向授权配置：`codex-safe-workspace` 与 `codex-safe-workspace-offline`；这些动态选项不会加入会跨选择保留的文件系统 deny。
 
-部分 Windows Desktop 构建仍可能在发送或完成期间显示另一个标签，即使实际路由正确。0.2.0 因此提供独立、可选的兼容层：它先确认本机签名 Desktop 仍包含经过验证的选择器 gate 与结构锚点，再用仅对该次 Codex 进程生效的主进程加载器，在 renderer 第一段脚本之前注册一个哈希固定的 session preload。它不提取、不修改、不复制客户端，不写 WindowsApps，不开放调试端口，也不写入用户级或机器级环境变量。官方 Desktop 更新后，启动器只有在精确包身份、有效签名者身份、选择器结构、隔离主进程探针和文档起始探针全部通过时，才会自动接受新构建并原子刷新版本与字节固定值；不兼容更新会保留上一次接受的状态并安全拒绝，无需用户为兼容更新重新安装或确认。验收会先故意提供不可用的继承模块路径，在真实 Windows PowerShell 下执行已安装启动器的无副作用校验路径（包括当前进程路由分支），成功后才接受 renderer 探针。安装还必须证明当前用户的启动监视器持续存活；一次接管失败只会被记录，不会让监视器随之退出。
+部分 Windows Desktop 构建仍可能在发送或完成期间显示另一个标签，即使实际路由正确。0.2.0 曾为此提供独立、可选的兼容层；0.2.1 已将其彻底移除。该实现依赖未公开的 Desktop 功能 gate 与进程级启动接管，既与 OpenAI 使用条款存在冲突，也会随客户端每次更新而失效。本项目现在把 Desktop 显示缺陷视为上游问题：只观察、记录并上报，不再修补专有客户端。如果你安装过 0.2.0 的兼容层，请运行下方的清理脚本；它只会移除遗留产物，绝不触碰签名的官方客户端。
 
 如果你以前是手动复制 `~/.codex/skills/secure-codex-setup`，而不是通过 marketplace 安装插件，请先把旧目录可恢复地移出技能发现路径，再添加 GitHub marketplace、安装 `codex-safe-setup` 并新建任务。不要让独立旧副本和插件副本同时被发现。
 
@@ -67,24 +67,16 @@ codex plugin add codex-safe-setup@codex-safe-setup
 
 每个 Release 都附带 `.sha256` 文件。可在 PowerShell 中运行 `Get-FileHash -Algorithm SHA256 <压缩包>` 核对下载内容。
 
-### 可选的 Windows Desktop 选择器兼容层
+### 清理旧版 Desktop selector 安装残留
 
-只有在直接观察到“没有点击但标签自行变化”时才使用。先预览；正式安装会单独要求确认，因为它依赖未公开的 Desktop 功能 gate、增加一个仅当前 Codex 进程使用的 session preload，并安装当前用户的启动监视器。安装不会重启正在运行的任务：
-
-```powershell
-& <skill-dir>/scripts/Install-DesktopPermissionSelectorFix.ps1 -PlanOnly
-& <skill-dir>/scripts/Install-DesktopPermissionSelectorFix.ps1 -ConfirmApply -AcknowledgeUnsupportedDesktopOverride
-& <skill-dir>/scripts/Test-DesktopPermissionSelectorFix.ps1
-```
-
-兼容的官方客户端更新不需要重新安装或手动批准；如果选择器 gate、结构锚点、包身份、签名身份或 Electron preload 行为发生不兼容变化，启动会保持禁用，且不会覆盖上一次通过验证的固定值，直到兼容层自身更新。
-
-回滚是可恢复的，停用的加载器世代以及迁移前的旧派生副本都会保存在 `CODEX_HOME/safe-setup/desktop-selector-fix-history`：
+如果之前安装过已被移除的兼容层，先预览再执行清理：
 
 ```powershell
-& <skill-dir>/scripts/Rollback-DesktopPermissionSelectorFix.ps1 -PlanOnly
-& <skill-dir>/scripts/Rollback-DesktopPermissionSelectorFix.ps1 -ConfirmRollback
+& <skill-dir>/scripts/Remove-LegacyDesktopSelectorArtifacts.ps1 -PlanOnly
+& <skill-dir>/scripts/Remove-LegacyDesktopSelectorArtifacts.ps1 -ConfirmApply
 ```
+
+清理脚本只精确匹配已知退役产物名（`Watch-CodexDesktop.vbs`、`desktop-ui-fix`、`desktop-selector-loader`、`CSS_DESKTOP_SELECTOR_*` 用户环境变量），删除前逐一归档快捷方式，把退役状态移入 `CODEX_HOME/safe-setup/legacy-selector-quarantine/` 隔离区，并且从不启动、关闭或重启任何进程。
 
 ## 你会做出的选择
 

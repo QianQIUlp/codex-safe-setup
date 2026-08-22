@@ -184,7 +184,7 @@ export const zhCN: UiContent = {
             detail: '只有 StrictProfile 显式拒绝。DynamicUi 不能在可写工作区内使用会粘连的 deny-glob。',
           },
         ],
-        note: 'DynamicUi 创建两个纯正向授权的运行时配置。受影响的选择器标签振荡由独立、可选的 Windows 兼容层处理，发布包不分发客户端文件。工作区内凭据文件仍可读；需要固定显式拒读时使用 StrictProfile。',
+        note: 'DynamicUi 创建两个纯正向授权的运行时配置。工作区内凭据文件仍可读；需要固定显式拒读时使用 StrictProfile。',
       },
       {
         id: 'network',
@@ -344,7 +344,7 @@ export const zhCN: UiContent = {
     ],
     promptLabel: '新建一个 Codex 任务或 CLI 会话，然后输入：',
     promptText: '使用 $codex-safe-setup 审计我当前的 Codex 权限，并安装推荐的安全配置。',
-    releaseNote: '0.2.0 增加独立确认且不创建客户端副本的可选 Windows 选择器加载器。兼容的官方更新会自动重新认证，不兼容的变化会安全拒绝。GitHub marketplace 跟随 main，并固定到最新 Release。',
+    releaseNote: '0.2.1 移除了 0.2.0 引入的 Windows 选择器兼容层，并提供清理旧版自启动残留的脚本。GitHub marketplace 跟随 main，并固定到最新 Release。',
     shaNote: '每个 Release 都附带可安装 ZIP 和 .sha256 文件。可在 PowerShell 中用 Get-FileHash -Algorithm SHA256 <压缩包> 核对。',
     detailsCta: {
       label: '查看安装详情',

@@ -1,6 +1,6 @@
 {
   "name": "codex-safe-setup",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Audit and install a least-privilege, recoverable local Codex configuration.",
   "author": {
     "name": "QianQIUlp and Codex Safe Setup Contributors",
@@ -14,7 +14,7 @@
   "interface": {
     "displayName": "Codex Safe Setup",
     "shortDescription": "Install verified, bounded Codex autonomy.",
-    "longDescription": "Installs reversible Codex permission routing and verification. On affected Windows Desktop builds, an optional acknowledged process-scoped loader can stabilize the selector without copying, modifying, or redistributing the signed client package.",
+    "longDescription": "Installs reversible least-privilege Codex permission routing, verifies effective runtime scope with black-box probes and real rollout evidence, and restores the exact prior configuration on rollback.",
     "developerName": "QianQIUlp and contributors",
     "category": "Developer Tools",
     "capabilities": ["Interactive", "Write"],
