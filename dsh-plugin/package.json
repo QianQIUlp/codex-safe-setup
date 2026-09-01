@@ -1,0 +1,23 @@
+{
+  "name": "dsh-safe-setup",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Interactive safe-configuration wizard for DeepSeek Harness (dsh): locks the model axis — sandbox tier, approval policy, web_fetch allowlist, credential-path guards — with plan-only preview, verification, and rollback. 安装 ≠ 验证。",
+  "main": "index.js",
+  "files": ["index.js", "cordis.patch.yml", "lib/"],
+  "scripts": {
+    "test": "node --test test/logic.test.js"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "security",
+    "least-privilege"
+  ],
+  "license": "Apache-2.0",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
